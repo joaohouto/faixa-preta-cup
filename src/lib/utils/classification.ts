@@ -1,7 +1,19 @@
 import { Belt, Gender } from "@prisma/client";
 
-export function calculateAge(birthdate: Date): number {
-  const today = new Date();
+export type BeltLevel = "INICIANTE" | "INTERMEDIÁRIO" | "AVANÇADO";
+export type AgeCategory =
+  | "SENIOR"
+  | "SUB21"
+  | "JUNIOR"
+  | "CADETE"
+  | "SUB14"
+  | "10-11 ANOS"
+  | "8-9 ANOS"
+  | "6-7 ANOS"
+  | "ATÉ 5 ANOS";
+
+export function calculateAge(birthdate: Date, referenceDate?: Date): number {
+  const today = referenceDate || new Date();
   let age = today.getFullYear() - birthdate.getFullYear();
   const m = today.getMonth() - birthdate.getMonth();
   if (m < 0 || (m === 0 && today.getDate() < birthdate.getDate())) {
@@ -10,50 +22,55 @@ export function calculateAge(birthdate: Date): number {
   return age;
 }
 
-function getBeltLevel(belt: Belt): "BEGINNER" | "INTERMEDIATE" | "ADVANCED" {
+export function getBeltLevel(belt: Belt): BeltLevel {
   switch (belt) {
     case Belt.WHITE:
     case Belt.BLUE:
     case Belt.YELLOW:
-      return "BEGINNER";
+      return "INICIANTE";
     case Belt.RED:
     case Belt.ORANGE:
     case Belt.GREEN:
-      return "INTERMEDIATE";
+      return "INTERMEDIÁRIO";
     case Belt.PURPLE:
     case Belt.BROWN:
     case Belt.BLACK:
-      return "ADVANCED";
+      return "AVANÇADO";
   }
 }
 
-function getAgeCategory(age: number): string {
-  if (age >= 18) return "SENIOR";
-  if (age >= 18 && age <= 20) return "SUB21";
-  if (age >= 16 && age <= 17) return "JUNIOR";
-  if (age >= 14 && age <= 15) return "CADET";
-  if (age >= 12 && age <= 13) return "SUB14";
-  if (age >= 10 && age <= 11) return "10-11 YEARS";
-  if (age >= 8 && age <= 9) return "8-9 YEARS";
-  if (age >= 6 && age <= 7) return "6-7 YEARS";
-  return "UP TO 5 YEARS";
+export function getAgeCategory(age: number): AgeCategory {
+  if (age >= 21) return "SENIOR";
+  if (age >= 18) return "SUB21";
+  if (age >= 16) return "JUNIOR";
+  if (age >= 14) return "CADETE";
+  if (age >= 12) return "SUB14";
+  if (age >= 10) return "10-11 ANOS";
+  if (age >= 8) return "8-9 ANOS";
+  if (age >= 6) return "6-7 ANOS";
+  return "ATÉ 5 ANOS";
 }
 
-export function getKataCategory(age: number, belt: Belt): string {
+export function getKataCategory(
+  age: number,
+  gender: Gender,
+  belt: Belt
+): string {
   const ageCategory = getAgeCategory(age);
   const beltLevel = getBeltLevel(belt);
-  return `KATA ${ageCategory} ${beltLevel}`;
+  return `KATA ${
+    gender === "MALE" ? "MASCULINO" : "FEMININO"
+  } ${ageCategory} ${beltLevel}`;
 }
 
 function getWeightCategory(
-  ageCategory: string,
+  ageCategory: AgeCategory,
   gender: Gender,
   weight: number
 ): string {
+  // Categorias infantis não usam peso
   if (
-    ["10-11 YEARS", "8-9 YEARS", "6-7 YEARS", "UP TO 5 YEARS"].includes(
-      ageCategory
-    )
+    ["10-11 ANOS", "8-9 ANOS", "6-7 ANOS", "ATÉ 5 ANOS"].includes(ageCategory)
   ) {
     return "";
   }
@@ -73,7 +90,7 @@ function getWeightCategory(
         if (weight <= 68) return "-68kg";
         if (weight <= 76) return "-76kg";
         return "+76kg";
-      case "CADET":
+      case "CADETE":
         if (weight <= 52) return "-52kg";
         if (weight <= 57) return "-57kg";
         if (weight <= 63) return "-63kg";
@@ -101,7 +118,7 @@ function getWeightCategory(
         if (weight <= 59) return "-59kg";
         if (weight <= 66) return "-66kg";
         return "+66kg";
-      case "CADET":
+      case "CADETE":
         if (weight <= 47) return "-47kg";
         if (weight <= 54) return "-54kg";
         if (weight <= 61) return "-61kg";
@@ -129,5 +146,16 @@ export function getKumiteCategory(
     ? getWeightCategory(ageCategory, gender, weight)
     : "";
 
-  return `KUMITE ${ageCategory} ${gender} ${beltLevel} ${weightCategory}`.trim();
+  return `KUMITE ${
+    gender === "MALE" ? "MASCULINO" : "FEMININO"
+  } ${ageCategory} ${beltLevel} ${weightCategory}`.trim();
+}
+
+export function validateKumiteRegistration(
+  kumite: boolean,
+  weight: number | null
+): void {
+  if (kumite && !weight) {
+    throw new Error("Peso é obrigatório para inscrição em Kumite");
+  }
 }

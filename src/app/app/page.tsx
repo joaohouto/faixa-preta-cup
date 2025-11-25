@@ -1,7 +1,7 @@
 import { getServerSession } from "next-auth";
 import { redirect } from "next/navigation";
 import { authOptions } from "@/lib/auth";
-import AppDashboard from "./dashboard";
+import AppDashboard from "./client";
 
 export default async function AppPage() {
   const session = await getServerSession(authOptions);

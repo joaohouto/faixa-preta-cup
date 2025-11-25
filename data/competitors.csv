@@ -1,0 +1,47 @@
+nome,sexo,peso,nascimento,faixa,escola,kumite,kata
+Arthur Brito,Masculino,19 kg,15/05/2020,Branca,Escola Centro Cristão,Sim,Sim
+Theo Felix,Masculino,20 kg,22/08/2020,Azul,Escola Feliciano Pio,Sim,Sim
+Brayan Paz,Masculino,18 kg,10/02/2020,Branca,Escola Feliciano Pio,Sim,Sim
+Isaque Lemes,Masculino,21 kg,30/11/2019,Branca,Escola Falcão,Sim,Sim
+Miguel Pessoa,Masculino,23 kg,14/06/2018,Amarela,Não informado,Sim,Sim
+Bruno Cardoso,Masculino,25 kg,05/09/2018,Branca,Escola Rotary Club,Sim,Sim
+Felipe Vilela,Masculino,24 kg,12/03/2019,Azul,Escola CAIC,Sim,Sim
+Weverton Nathan,Masculino,22 kg,28/11/2018,Branca,Escola Enio Cabral,Sim,Sim
+Pietro Oliveira,Masculino,26 kg,17/04/2018,Laranja,Escola Rotary Club,Sim,Sim
+Daniel Costa,Masculino,25 kg,20/08/2019,Vermelha,Escola Ademir Brites,Sim,Sim
+Gabriel Monteiro,Masculino,27 kg,02/01/2018,Verde,Escola Antônio Santos,Sim,Sim
+Guilherme Albuquerque,Masculino,30 kg,10/05/2016,Azul,Não informado,Sim,Sim
+Italo Kauã,Masculino,32 kg,25/09/2016,Amarela,Escola Marcolino Lili,Sim,Sim
+Geovane Antônio,Masculino,29 kg,14/02/2017,Branca,Escola CAIC,Sim,Sim
+Dylan Borges,Masculino,34 kg,11/07/2016,Vermelha,Escola Falcão,Sim,Sim
+Antônio Lázaro,Masculino,33 kg,05/12/2016,Laranja,Escola Antônio Trindade,Sim,Sim
+Miguel Fidelis,Masculino,31 kg,22/03/2017,Verde,Escola Antônio Santos,Sim,Sim
+Guilherme Quadros,Masculino,38 kg,19/08/2014,Branca,Escola Cândido Mariano,Sim,Sim
+Leonardo Felix,Masculino,40 kg,03/04/2015,Amarela,Escola Marcolino Lili,Sim,Sim
+Pedro Trindade,Masculino,42 kg,15/06/2014,Vermelha,Escola Centro Cristão,Sim,Sim
+Gabriel Ragalzi,Masculino,39 kg,20/10/2014,Verde,Escola Erso Gomes,Sim,Sim
+José,Masculino,41 kg,12/12/2014,Laranja,Escola Cejar,Sim,Sim
+Brayan Emanuel,Masculino,37 kg,25/02/2015,Laranja,Escola CAIC,Sim,Sim
+Gustavo Botelho,Masculino,38 kg,08/09/2014,Vermelha,Não informado,Sim,Sim
+José Heitor B. da Costa,Masculino,43 kg,14/01/2014,Vermelha,Escola Erso Gomes,Sim,Sim
+João Matheus,Masculino,48 kg,05/05/2012,Verde,Escola Cejar,Sim,Sim
+Rafael Felix,Masculino,50 kg,18/11/2012,Laranja,Escola Marcolino Lili,Sim,Sim
+Gleidson Paz,Masculino,52 kg,22/07/2013,Vermelha,Escola Cejar,Sim,Sim
+João Felipe,Masculino,49 kg,10/03/2013,Laranja,Escola Doris,Sim,Sim
+Nicolas Albuquerque,Masculino,58 kg,15/09/2010,Roxa,Escola Cejar,Sim,Sim
+Kauã Tavares,Masculino,60 kg,28/04/2011,Marrom,Escola Cejar,Sim,Sim
+Heloísa Correia,Feminino,22 kg,10/06/2018,Branca,Escola Centro Cristão,Sim,Sim
+Helena Emanuelly,Feminino,24 kg,02/12/2018,Amarela,Escola Feliciano Pio,Sim,Sim
+Beatriz Dornelles,Feminino,28 kg,15/03/2017,Vermelha,Escola Emília Alves,Sim,Sim
+Maria Luiza,Feminino,30 kg,20/07/2016,Laranja,Escola Erso Gomes,Sim,Sim
+Maria Eduarda,Feminino,36 kg,12/05/2015,Amarela,Escola Rotary Club,Sim,Sim
+Mariane Medeiros,Feminino,38 kg,08/08/2014,Verde,Escola Antônio Trindade,Sim,Sim
+Antonela Lima,Feminino,35 kg,25/11/2014,Laranja,Escola Cândido Mariano,Sim,Sim
+Ana Helena,Feminino,37 kg,14/02/2015,Vermelha,Escola Centro Cristão,Sim,Sim
+Luiza Fialho,Feminino,39 kg,30/09/2014,Vermelha,Escola Falcão,Sim,Sim
+Ana Venâncio,Feminino,46 kg,18/06/2012,Verde,Escola Cejar,Sim,Sim
+Jasmim Portes,Feminino,48 kg,22/10/2013,Laranja,Escola Irene Cicalise,Sim,Sim
+Lis Gaia,Feminino,43 kg,12/04/2010,Verde,Escola Marechal,Sim,Sim
+Larissa Firmino,Feminino,44 kg,05/09/2011,Laranja,Escola Centro Cristão,Sim,Sim
+Sofia Carpinedo,Feminino,52 kg,20/01/2010,Vermelha,Escola Falcão,Não,Sim
+Isabelly Vitória,Feminino,50 kg,14/11/2011,Vermelha,Escola Cândido Mariano,Não,Sim

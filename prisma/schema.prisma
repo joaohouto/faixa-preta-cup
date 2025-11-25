@@ -71,6 +71,17 @@ enum Belt {
   BLACK
 }
 
+enum BracketStatus {
+  NOT_STARTED // Chave gerada, sem resultados
+  IN_PROGRESS // Pelo menos uma luta registrada
+  COMPLETED // Todas lutas finalizadas
+}
+
+enum Modality {
+  KATA
+  KUMITE
+}
+
 model Tournament {
   id          String       @id @default(auto()) @map("_id") @db.ObjectId
   name        String
@@ -78,26 +89,95 @@ model Tournament {
   organizerId String       @db.ObjectId
   organizer   User         @relation(fields: [organizerId], references: [id])
   competitors Competitor[]
+  Bracket     Bracket[]
 
   @@index([organizerId])
 }
 
 model Competitor {
-  id                String     @id @default(auto()) @map("_id") @db.ObjectId
-  name              String
-  gender            Gender
-  weight            Float?
-  birthdate         DateTime
-  belt              Belt
-  school            String
-  kata              Boolean    @default(false)
-  kumite            Boolean    @default(false)
-  tournamentId      String     @db.ObjectId
-  tournament        Tournament @relation(fields: [tournamentId], references: [id])
-  age               Int
-  kataCategory      String?
-  kumiteCategory    String?
-  createdAt         DateTime   @default(now())
+  id             String     @id @default(auto()) @map("_id") @db.ObjectId
+  name           String
+  gender         Gender
+  weight         Float?
+  birthdate      DateTime
+  belt           Belt
+  school         String
+  kata           Boolean    @default(false)
+  kumite         Boolean    @default(false)
+  tournamentId   String     @db.ObjectId
+  tournament     Tournament @relation(fields: [tournamentId], references: [id])
+  age            Int
+  kataCategory   String?
+  kumiteCategory String?
+  createdAt      DateTime   @default(now())
 
   @@index([tournamentId])
+}
+
+model Bracket {
+  id           String     @id @default(auto()) @map("_id") @db.ObjectId
+  tournamentId String     @db.ObjectId
+  tournament   Tournament @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+
+  // Categoria e Modalidade
+  category String // Ex: "KUMITE MALE SENIOR ADVANCED -75kg"
+  modality Modality // KATA ou KUMITE
+
+  // Estrutura da Chave
+  totalSlots  Int // 2, 4, 8, 16, 32... (potência de 2)
+  totalRounds Int // log2(totalSlots)
+
+  // Controle
+  status BracketStatus @default(NOT_STARTED)
+
+  // Timestamps
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relações
+  matches Match[]
+
+  @@unique([tournamentId, category])
+  @@index([tournamentId])
+  @@index([category])
+  @@index([status])
+}
+
+model Match {
+  id        String  @id @default(auto()) @map("_id") @db.ObjectId
+  bracketId String  @db.ObjectId
+  bracket   Bracket @relation(fields: [bracketId], references: [id], onDelete: Cascade)
+
+  // Posição na Chave
+  round    Int // 1 (primeira rodada), 2, 3, ... até final
+  position Int // Posição dentro da rodada (0, 1, 2, ...)
+
+  // Competidores (terminologia do karatê)
+  akaId String? @db.ObjectId // Competidor vermelho (Aka)
+  aoId  String? @db.ObjectId // Competidor azul (Ao)
+
+  // Resultado
+  winnerId String? @db.ObjectId
+
+  // Placar
+  akaScore Int? @default(0)
+  aoScore  Int? @default(0)
+
+  // Kumite: empate no placar resolve por Hantei (decisão dos árbitros)
+  decisionByHantei Boolean @default(false)
+
+  // Tipos Especiais de Luta
+  isBye         Boolean @default(false) // Um competidor avança automaticamente
+  isThirdPlace  Boolean @default(false) // Disputa de 3º lugar
+  isFourthPlace Boolean @default(false) // Disputa de 4º lugar (opcional)
+
+  // Controle
+  isCompleted Boolean   @default(false)
+  completedAt DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@index([bracketId])
+  @@index([round])
+  @@index([isThirdPlace])
+  @@index([isFourthPlace])
 }

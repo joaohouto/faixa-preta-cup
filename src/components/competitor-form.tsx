@@ -43,6 +43,23 @@ const competitorSchema = z.object({
   kumite: z.boolean().default(false),
 });
 
+const beltLabels: Record<Belt, string> = {
+  WHITE: "Branca",
+  BLUE: "Azul",
+  YELLOW: "Amarela",
+  RED: "Vermelha",
+  ORANGE: "Laranja",
+  GREEN: "Verde",
+  PURPLE: "Roxa",
+  BROWN: "Marrom",
+  BLACK: "Preta",
+};
+
+const genderLabels: Record<Gender, string> = {
+  MALE: "Masculino",
+  FEMALE: "Feminino",
+};
+
 type CompetitorFormValues = z.infer<typeof competitorSchema>;
 
 interface CompetitorFormProps {
@@ -92,11 +109,11 @@ export function CompetitorForm({
   return (
     <Dialog>
       <DialogTrigger asChild>
-        <Button>Register Competitor</Button>
+        <Button>Registrar Competidor</Button>
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>New Competitor</DialogTitle>
+          <DialogTitle>Novo Competidor</DialogTitle>
         </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
@@ -105,7 +122,7 @@ export function CompetitorForm({
               name="name"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Name</FormLabel>
+                  <FormLabel>Nome</FormLabel>
                   <FormControl>
                     <Input placeholder="e.g., John Doe" {...field} />
                   </FormControl>
@@ -118,20 +135,20 @@ export function CompetitorForm({
               name="gender"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Gender</FormLabel>
+                  <FormLabel>Sexo</FormLabel>
                   <Select
                     onValueChange={field.onChange}
                     defaultValue={field.value}
                   >
                     <FormControl>
                       <SelectTrigger>
-                        <SelectValue placeholder="Select gender" />
+                        <SelectValue placeholder="Selecionar sexo" />
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      {Object.values(Gender).map((g) => (
-                        <SelectItem key={g} value={g}>
-                          {g}
+                      {Object.entries(genderLabels).map(([value, label]) => (
+                        <SelectItem key={value} value={value}>
+                          {label}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -145,7 +162,7 @@ export function CompetitorForm({
               name="weight"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Weight (kg)</FormLabel>
+                  <FormLabel>Peso (kg)</FormLabel>
                   <FormControl>
                     <Input type="number" {...field} />
                   </FormControl>
@@ -158,7 +175,7 @@ export function CompetitorForm({
               name="birthdate"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Birthdate</FormLabel>
+                  <FormLabel>Data de Nascimento</FormLabel>
                   <FormControl>
                     <Input type="date" {...field} />
                   </FormControl>
@@ -171,14 +188,14 @@ export function CompetitorForm({
               name="belt"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Belt</FormLabel>
+                  <FormLabel>Faixa</FormLabel>
                   <Select
                     onValueChange={field.onChange}
                     defaultValue={field.value}
                   >
                     <FormControl>
                       <SelectTrigger>
-                        <SelectValue placeholder="Select belt" />
+                        <SelectValue placeholder="Selecionar faixa" />
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
@@ -198,7 +215,7 @@ export function CompetitorForm({
               name="school"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>School/Association</FormLabel>
+                  <FormLabel>Escola/Associação</FormLabel>
                   <FormControl>
                     <Input placeholder="e.g., Shotokan Karate" {...field} />
                   </FormControl>
@@ -238,7 +255,7 @@ export function CompetitorForm({
                 )}
               />
             </div>
-            <Button type="submit">Register</Button>
+            <Button type="submit">Registrar</Button>
           </form>
         </Form>
       </DialogContent>

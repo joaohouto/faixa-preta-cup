@@ -24,7 +24,7 @@ export async function POST(req: Request) {
 
     const age = calculateAge(new Date(competitorData.birthdate));
     const kataCategory = competitorData.kata
-      ? getKataCategory(age, competitorData.belt)
+      ? getKataCategory(age, competitorData.gender, competitorData.belt)
       : null;
     const kumiteCategory = competitorData.kumite
       ? getKumiteCategory(
