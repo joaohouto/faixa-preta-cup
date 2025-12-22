@@ -1,4 +1,10 @@
-import { FileTextIcon, LayersIcon, Trophy, UsersIcon } from "lucide-react";
+import {
+  FileTextIcon,
+  LayersIcon,
+  Presentation,
+  Trophy,
+  UsersIcon,
+} from "lucide-react";
 
 import ThemeToggle from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
@@ -69,6 +75,11 @@ export function Header({
           href: `/app/${currentTournamentId}/brackets`,
           label: "Chaves",
           icon: LayersIcon,
+        },
+        {
+          href: `/app/${currentTournamentId}/scoreboard`,
+          label: "Painel de Pontos",
+          icon: Presentation,
         },
       ]
     : [];

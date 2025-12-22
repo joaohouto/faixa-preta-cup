@@ -2,8 +2,6 @@
 
 import { Header } from "@/components/header";
 import { useParams } from "next/navigation";
-import { useEffect, useState } from "react";
-import { Tournament } from "@prisma/client";
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const params = useParams();
