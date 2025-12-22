@@ -77,7 +77,7 @@ export function CompetitorsList({
     setLoading(true);
     try {
       const response = await fetch(
-        `/api/competitors?tournamentId=${tournamentId}`
+        `/api/tournaments/${tournamentId}/competitors`
       );
       if (!response.ok) {
         throw new Error("Failed to fetch competitors");
@@ -103,17 +103,21 @@ export function CompetitorsList({
   async function handleDeleteAll() {
     setIsDeletingAll(true);
     try {
-      // Deletar todos os competidores
-      const deletePromises = competitors.map((competitor) =>
-        fetch(`/api/competitors/${competitor.id}`, {
+      const response = await fetch(
+        `/api/tournaments/${tournamentId}/competitors/bulk-delete`,
+        {
           method: "DELETE",
-        })
+        }
       );
 
-      await Promise.all(deletePromises);
+      if (!response.ok) {
+        throw new Error("Failed to delete competitors");
+      }
+
+      const data = await response.json();
 
       toast.success(
-        `${competitors.length} competidor(es) excluído(s) com sucesso!`
+        `${data.deletedCount} competidor(es) excluído(s) com sucesso!`
       );
       setDeleteAllDialogOpen(false);
       onRefresh();

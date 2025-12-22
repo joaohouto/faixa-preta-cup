@@ -121,13 +121,16 @@ export function CompetitorEditDialog({
     if (!competitor) return;
 
     try {
-      const response = await fetch(`/api/competitors/${competitor.id}`, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(values),
-      });
+      const response = await fetch(
+        `/api/tournaments/${competitor.tournamentId}/competitors/${competitor.id}`,
+        {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(values),
+        }
+      );
 
       if (!response.ok) {
         throw new Error("Failed to update competitor");
@@ -145,9 +148,12 @@ export function CompetitorEditDialog({
     if (!competitor) return;
 
     try {
-      const response = await fetch(`/api/competitors/${competitor.id}`, {
-        method: "DELETE",
-      });
+      const response = await fetch(
+        `/api/tournaments/${competitor.tournamentId}/competitors/${competitor.id}`,
+        {
+          method: "DELETE",
+        }
+      );
 
       if (!response.ok) {
         throw new Error("Failed to delete competitor");

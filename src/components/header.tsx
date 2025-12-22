@@ -1,10 +1,4 @@
-import {
-  FileTextIcon,
-  HomeIcon,
-  LayersIcon,
-  Trophy,
-  UsersIcon,
-} from "lucide-react";
+import { FileTextIcon, LayersIcon, Trophy, UsersIcon } from "lucide-react";
 
 import ThemeToggle from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
@@ -80,7 +74,7 @@ export function Header({
     : [];
 
   return (
-    <header className="border-b px-4 md:px-6">
+    <header className="border-b px-4 md:px-6 print:hidden">
       <div className="container mx-auto flex h-16 items-center justify-between gap-4">
         {/* Left side */}
         <div className="flex flex-1 items-center gap-2">

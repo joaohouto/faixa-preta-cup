@@ -87,13 +87,16 @@ export function CompetitorForm({
 
   async function onSubmit(values: CompetitorFormValues) {
     try {
-      const response = await fetch("/api/competitors", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ ...values, tournamentId }),
-      });
+      const response = await fetch(
+        `/api/tournaments/${tournamentId}/competitors`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(values),
+        }
+      );
 
       if (!response.ok) {
         throw new Error("Failed to create competitor");

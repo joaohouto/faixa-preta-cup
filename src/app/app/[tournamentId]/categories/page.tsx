@@ -22,7 +22,6 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Spinner } from "@/components/luxe/spinner";
 import {
   Empty,
   EmptyDescription,
@@ -66,34 +65,17 @@ export default function CategoriesPage({
   useEffect(() => {
     async function fetchData() {
       try {
-        // Buscar torneio
-        const tournamentRes = await fetch(
-          `/api/tournaments/${params.tournamentId}`
+        const res = await fetch(
+          `/api/tournaments/${params.tournamentId}/categories`
         );
-        if (!tournamentRes.ok) throw new Error("Tournament not found");
-        const tournamentData = await tournamentRes.json();
-        setTournament(tournamentData);
 
-        // Buscar competidores
-        const competitorsRes = await fetch(
-          `/api/competitors?tournamentId=${params.tournamentId}`
-        );
-        if (!competitorsRes.ok) throw new Error("Failed to fetch competitors");
-        const competitors: Competitor[] = await competitorsRes.json();
+        if (!res.ok) throw new Error("Failed to fetch categories");
 
-        // Agrupar por categoria Kata
-        const kataGroups = groupByCategory(
-          competitors.filter((c) => c.kata && c.kataCategory),
-          "kataCategory"
-        );
-        setKataCategories(kataGroups);
+        const data = await res.json();
 
-        // Agrupar por categoria Kumite
-        const kumiteGroups = groupByCategory(
-          competitors.filter((c) => c.kumite && c.kumiteCategory),
-          "kumiteCategory"
-        );
-        setKumiteCategories(kumiteGroups);
+        setTournament(data.tournament || null);
+        setKataCategories(data.kataCategories || []);
+        setKumiteCategories(data.kumiteCategories || []);
       } catch (error) {
         toast.error("Falha ao carregar categorias.");
       } finally {
@@ -103,38 +85,6 @@ export default function CategoriesPage({
 
     fetchData();
   }, [params.tournamentId]);
-
-  function groupByCategory(
-    competitors: Competitor[],
-    field: "kataCategory" | "kumiteCategory"
-  ): CategoryGroup[] {
-    const groups = competitors.reduce((acc, competitor) => {
-      const category = competitor[field];
-      if (!category) return acc;
-
-      if (!acc[category]) {
-        acc[category] = [];
-      }
-      acc[category].push(competitor);
-      return acc;
-    }, {} as Record<string, Competitor[]>);
-
-    // Ordenar categorias alfabeticamente e ordenar competidores dentro de cada categoria
-    return Object.entries(groups)
-      .sort(([a], [b]) => a.localeCompare(b))
-      .map(([category, competitors]) => ({
-        category,
-        competitors: competitors.sort((a, b) => {
-          // Ordenar por: idade, sexo, peso, graduação
-          if (a.age !== b.age) return a.age - b.age;
-          if (a.gender !== b.gender) return a.gender === "FEMALE" ? -1 : 1;
-          const weightA = a.weight || 0;
-          const weightB = b.weight || 0;
-          if (weightA !== weightB) return weightA - weightB;
-          return a.belt.localeCompare(b.belt);
-        }),
-      }));
-  }
 
   if (loading) {
     return (

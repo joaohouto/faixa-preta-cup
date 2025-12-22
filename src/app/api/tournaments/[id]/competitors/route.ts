@@ -7,7 +7,10 @@ import {
 } from "@/lib/utils/classification";
 import { NextResponse } from "next/server";
 
-export async function POST(req: Request) {
+export async function POST(
+  req: Request,
+  { params }: { params: { id: string } }
+) {
   try {
     const session = await auth();
 
@@ -15,12 +18,22 @@ export async function POST(req: Request) {
       return new NextResponse("Unauthorized", { status: 401 });
     }
 
+    const tournamentId = params.id;
     const body = await req.json();
-    const { tournamentId, ...competitorData } = body;
 
-    if (!tournamentId) {
-      return new NextResponse("Tournament ID is required", { status: 400 });
+    // Verifica se o usuário é o organizador do torneio
+    const tournament = await db.tournament.findUnique({
+      where: { id: tournamentId },
+    });
+
+    if (!tournament || tournament.organizerId !== session.user.id) {
+      return new NextResponse("Unauthorized", { status: 401 });
     }
+
+    const competitorData = {
+      ...body,
+      tournamentId,
+    };
 
     const age = calculateAge(new Date(competitorData.birthdate));
     const kataCategory = competitorData.kata
@@ -37,8 +50,14 @@ export async function POST(req: Request) {
 
     const competitor = await db.competitor.create({
       data: {
-        ...competitorData,
+        name: competitorData.name,
+        gender: competitorData.gender,
+        weight: competitorData.weight,
         birthdate: new Date(competitorData.birthdate),
+        belt: competitorData.belt,
+        school: competitorData.school,
+        kata: competitorData.kata,
+        kumite: competitorData.kumite,
         age,
         kataCategory,
         kumiteCategory,
@@ -53,18 +72,26 @@ export async function POST(req: Request) {
   }
 }
 
-export async function GET(req: Request) {
+export async function GET(
+  req: Request,
+  { params }: { params: { id: string } }
+) {
   try {
     const session = await auth();
-    const { searchParams } = new URL(req.url);
-    const tournamentId = searchParams.get("tournamentId");
 
     if (!session?.user?.id) {
       return new NextResponse("Unauthorized", { status: 401 });
     }
 
-    if (!tournamentId) {
-      return new NextResponse("Tournament ID is required", { status: 400 });
+    const tournamentId = params.id;
+
+    // Verifica se o usuário é o organizador do torneio
+    const tournament = await db.tournament.findUnique({
+      where: { id: tournamentId },
+    });
+
+    if (!tournament || tournament.organizerId !== session.user.id) {
+      return new NextResponse("Unauthorized", { status: 401 });
     }
 
     const competitors = await db.competitor.findMany({

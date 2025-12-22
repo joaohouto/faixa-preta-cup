@@ -38,7 +38,10 @@ const genderMapping: Record<string, Gender> = {
   feminino: Gender.FEMALE,
 };
 
-export async function POST(req: Request) {
+export async function POST(
+  req: Request,
+  { params }: { params: { id: string } }
+) {
   try {
     const session = await auth();
 
@@ -46,16 +49,22 @@ export async function POST(req: Request) {
       return new NextResponse("Unauthorized", { status: 401 });
     }
 
+    const tournamentId = params.id;
+
+    // Verifica se o usuário é o organizador do torneio
+    const tournament = await db.tournament.findUnique({
+      where: { id: tournamentId },
+    });
+
+    if (!tournament || tournament.organizerId !== session.user.id) {
+      return new NextResponse("Unauthorized", { status: 401 });
+    }
+
     const formData = await req.formData();
     const file = formData.get("file") as File;
-    const tournamentId = formData.get("tournamentId") as string;
 
     if (!file) {
       return new NextResponse("No file uploaded", { status: 400 });
-    }
-
-    if (!tournamentId) {
-      return new NextResponse("Tournament ID is required", { status: 400 });
     }
 
     const csv = await file.text();

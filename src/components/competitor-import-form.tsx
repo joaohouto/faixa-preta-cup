@@ -36,13 +36,15 @@ export function CompetitorImportForm({
 
     const formData = new FormData();
     formData.append("file", file);
-    formData.append("tournamentId", tournamentId);
 
     try {
-      const response = await fetch("/api/competitors/import", {
-        method: "POST",
-        body: formData,
-      });
+      const response = await fetch(
+        `/api/tournaments/${tournamentId}/competitors/import`,
+        {
+          method: "POST",
+          body: formData,
+        }
+      );
 
       if (!response.ok) {
         const errorData = await response.json();

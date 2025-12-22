@@ -3,26 +3,34 @@
 import { useEffect, useState } from "react";
 import { Tournament } from "@prisma/client";
 import { toast } from "sonner";
-import { Plus } from "lucide-react";
 
 import { Card, CardContent } from "@/components/ui/card";
 import { CompetitorForm } from "@/components/competitor-form";
 import { CompetitorsList } from "@/components/competitors-list";
 import { CompetitorImportForm } from "@/components/competitor-import-form";
 
-export default function CompetitorsPage({
-  params,
-}: {
-  params: { tournamentId: string };
-}) {
+interface CompetitorsPageProps {
+  params: Promise<{ tournamentId: string }>;
+}
+
+export default function CompetitorsPage({ params }: CompetitorsPageProps) {
+  const [tournamentId, setTournamentId] = useState<string>("");
   const [tournament, setTournament] = useState<Tournament | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
+    params.then((resolvedParams) => {
+      setTournamentId(resolvedParams.tournamentId);
+    });
+  }, [params]);
+
+  useEffect(() => {
+    if (!tournamentId) return;
+
     async function fetchTournament() {
       try {
-        const response = await fetch(`/api/tournaments/${params.tournamentId}`);
+        const response = await fetch(`/api/tournaments/${tournamentId}`);
         if (!response.ok) throw new Error("Tournament not found");
         const data = await response.json();
         setTournament(data);
@@ -34,7 +42,7 @@ export default function CompetitorsPage({
     }
 
     fetchTournament();
-  }, [params.tournamentId]);
+  }, [tournamentId]);
 
   function handleRefresh() {
     setRefreshKey((prev) => prev + 1);
@@ -75,11 +83,11 @@ export default function CompetitorsPage({
       {/* Botões de ação */}
       <div className="flex gap-2 mb-6">
         <CompetitorForm
-          tournamentId={params.tournamentId}
+          tournamentId={tournamentId}
           onCompetitorCreated={handleRefresh}
         />
         <CompetitorImportForm
-          tournamentId={params.tournamentId}
+          tournamentId={tournamentId}
           onCompetitorsImported={handleRefresh}
         />
       </div>
@@ -88,7 +96,7 @@ export default function CompetitorsPage({
       <Card>
         <CardContent className="px-6">
           <CompetitorsList
-            tournamentId={params.tournamentId}
+            tournamentId={tournamentId}
             refreshKey={refreshKey}
             onRefresh={handleRefresh}
           />
