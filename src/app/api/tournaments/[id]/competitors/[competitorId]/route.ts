@@ -1,9 +1,9 @@
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/prisma";
 import {
-  calcularIdade,
-  getCategoriaKata,
-  getCategoriaKumite,
+  calculateAge,
+  getKataCategory,
+  getKumiteCategory,
 } from "@/lib/utils/classification";
 import { NextResponse } from "next/server";
 
@@ -26,12 +26,12 @@ export async function PUT(
       birthdate: new Date(body.birthdate),
     };
 
-    const idade = calcularIdade(competitorData.birthdate);
+    const idade = calculateAge(competitorData.birthdate);
     const categoriaKata = competitorData.kata
-      ? getCategoriaKata(idade, competitorData.gender, competitorData.belt)
+      ? getKataCategory(idade, competitorData.gender, competitorData.belt)
       : null;
     const categoriaKumite = competitorData.kumite
-      ? getCategoriaKumite(
+      ? getKumiteCategory(
           idade,
           competitorData.gender,
           competitorData.weight,
