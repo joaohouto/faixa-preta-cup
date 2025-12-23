@@ -88,7 +88,7 @@ export function CompetitorEditDialog({
 }: CompetitorEditDialogProps) {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 
-  const form = useForm<CompetitorFormValues>({
+  const form = useForm({
     resolver: zodResolver(competitorSchema),
     defaultValues: {
       name: "",
@@ -226,7 +226,7 @@ export function CompetitorEditDialog({
                   <FormItem>
                     <FormLabel>Peso (kg)</FormLabel>
                     <FormControl>
-                      <Input type="number" step="0.1" {...field} />
+                      <Input type="number" step="0.1" {...(field as any)} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>

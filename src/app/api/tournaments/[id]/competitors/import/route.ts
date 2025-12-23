@@ -40,16 +40,15 @@ const genderMapping: Record<string, Gender> = {
 
 export async function POST(
   req: Request,
-  { params }: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
   try {
     const session = await auth();
-
     if (!session?.user?.id) {
       return new NextResponse("Unauthorized", { status: 401 });
     }
 
-    const tournamentId = params.id;
+    const { id: tournamentId } = await context.params;
 
     // Verifica se o usuário é o organizador do torneio
     const tournament = await db.tournament.findUnique({

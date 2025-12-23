@@ -73,7 +73,7 @@ const statusIcons = {
 export default function BracketsPage({
   params,
 }: {
-  params: { tournamentId: string };
+  params: Promise<{ tournamentId: string }>;
 }) {
   const [brackets, setBrackets] = useState<BracketWithCount[]>([]);
   const [loading, setLoading] = useState(true);
@@ -81,16 +81,25 @@ export default function BracketsPage({
   const [confirmDialog, setConfirmDialog] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [resolvedParams, setResolvedParams] = useState<{
+    tournamentId: string;
+  } | null>(null);
 
   useEffect(() => {
+    params.then((p) => setResolvedParams(p));
+  }, [params]);
+
+  useEffect(() => {
+    if (!resolvedParams) return;
     fetchBrackets();
-  }, [params.tournamentId]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [resolvedParams?.tournamentId]);
 
   async function fetchBrackets() {
     try {
       setLoading(true);
       const bracketsRes = await fetch(
-        `/api/tournaments/${params.tournamentId}/brackets`
+        `/api/tournaments/${resolvedParams!.tournamentId}/brackets`
       );
       if (!bracketsRes.ok) throw new Error("Failed to fetch brackets");
       const data = await bracketsRes.json();
@@ -108,7 +117,7 @@ export default function BracketsPage({
 
     try {
       const res = await fetch(
-        `/api/tournaments/${params.tournamentId}/brackets`,
+        `/api/tournaments/${resolvedParams!.tournamentId}/brackets`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -143,7 +152,9 @@ export default function BracketsPage({
     setDeletingId(bracketId);
     try {
       const res = await fetch(
-        `/api/tournaments/${params.tournamentId}/brackets/${bracketId}`,
+        `/api/tournaments/${
+          resolvedParams!.tournamentId
+        }/brackets/${bracketId}`,
         { method: "DELETE" }
       );
 
@@ -304,7 +315,7 @@ export default function BracketsPage({
                   <BracketCard
                     key={bracket.id}
                     bracket={bracket}
-                    tournamentId={params.tournamentId}
+                    tournamentId={resolvedParams?.tournamentId ?? ""}
                     onDelete={handleDeleteBracket}
                     isDeleting={deletingId === bracket.id}
                   />
@@ -336,7 +347,7 @@ export default function BracketsPage({
                   <BracketCard
                     key={bracket.id}
                     bracket={bracket}
-                    tournamentId={params.tournamentId}
+                    tournamentId={resolvedParams?.tournamentId ?? ""}
                     onDelete={handleDeleteBracket}
                     isDeleting={deletingId === bracket.id}
                   />

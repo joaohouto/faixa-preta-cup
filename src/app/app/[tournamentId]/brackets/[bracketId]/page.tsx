@@ -6,13 +6,7 @@ import { toast } from "sonner";
 import { ArrowLeft, Trophy, Medal } from "lucide-react";
 import Link from "next/link";
 
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -30,28 +24,40 @@ type BracketWithMatches = Bracket & {
 export default function BracketDetailPage({
   params,
 }: {
-  params: { tournamentId: string; bracketId: string };
+  params: Promise<{ tournamentId: string; bracketId: string }>;
 }) {
   const [bracket, setBracket] = useState<BracketWithMatches | null>(null);
   const [loading, setLoading] = useState(true);
+  const [resolvedParams, setResolvedParams] = useState<{
+    tournamentId: string;
+    bracketId: string;
+  } | null>(null);
 
   useEffect(() => {
+    params.then((p) => setResolvedParams(p));
+  }, [params]);
+
+  useEffect(() => {
+    if (!resolvedParams) return;
     fetchData();
-  }, [params.tournamentId, params.bracketId]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [resolvedParams?.tournamentId, resolvedParams?.bracketId]);
 
   async function fetchData() {
     try {
       setLoading(true);
 
       const res = await fetch(
-        `/api/tournaments/${params.tournamentId}/brackets/${params.bracketId}`
+        `/api/tournaments/${resolvedParams!.tournamentId}/brackets/${
+          resolvedParams!.bracketId
+        }`
       );
       if (!res.ok) throw new Error("Falha ao buscar chave");
       const data = await res.json();
 
       // Fetch competitors
       const compRes = await fetch(
-        `/api/tournaments/${params.tournamentId}/competitors`
+        `/api/tournaments/${resolvedParams!.tournamentId}/competitors`
       );
       if (!compRes.ok) throw new Error("Falha ao carregar competidores");
       const competitors: Competitor[] = await compRes.json();
@@ -126,7 +132,7 @@ export default function BracketDetailPage({
     <div className="container mx-auto p-6">
       {/* Header */}
       <div className="mb-6 flex items-center gap-4">
-        <Link href={`/app/${params.tournamentId}/brackets`}>
+        <Link href={`/app/${resolvedParams?.tournamentId}/brackets`}>
           <Button variant="ghost" size="icon">
             <ArrowLeft />
           </Button>

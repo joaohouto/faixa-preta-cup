@@ -134,7 +134,6 @@ export function Header({
                         <NavigationMenuLink
                           href={link.href}
                           className="flex-row items-center gap-2 py-1.5"
-                          active={link.active}
                         >
                           <Icon
                             size={16}

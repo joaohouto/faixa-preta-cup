@@ -4,44 +4,52 @@ import { NextResponse } from "next/server";
 
 export async function GET(
   req: Request,
-  { params }: { params: { id: string } }
-) {
-  const session = await auth();
-
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
-  const tournament = await prisma.tournament.findFirst({
-    where: {
-      id: params.id,
-      organizerId: session.user.id,
-    },
-  });
-
-  if (!tournament) {
-    return NextResponse.json(
-      { error: "Tournament not found" },
-      { status: 404 }
-    );
-  }
-
-  return NextResponse.json(tournament);
-}
-export async function PUT(
-  req: Request,
-  { params }: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
   try {
     const session = await auth();
-
     if (!session?.user?.id) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      return new NextResponse("Unauthorized", { status: 401 });
     }
+
+    const { id: tournamentId } = await context.params;
 
     const tournament = await prisma.tournament.findFirst({
       where: {
-        id: params.id,
+        id: tournamentId,
+        organizerId: session.user.id,
+      },
+    });
+
+    if (!tournament) {
+      return NextResponse.json(
+        { error: "Tournament not found" },
+        { status: 404 }
+      );
+    }
+
+    return NextResponse.json(tournament);
+  } catch (error) {
+    console.log("[TOURNAMENT_GET]", error);
+    return new NextResponse("Internal Error", { status: 500 });
+  }
+}
+
+export async function PUT(
+  req: Request,
+  context: { params: Promise<{ id: string }> }
+) {
+  try {
+    const session = await auth();
+    if (!session?.user?.id) {
+      return new NextResponse("Unauthorized", { status: 401 });
+    }
+
+    const { id: tournamentId } = await context.params;
+
+    const tournament = await prisma.tournament.findFirst({
+      where: {
+        id: tournamentId,
         organizerId: session.user.id,
       },
     });
@@ -56,7 +64,7 @@ export async function PUT(
     const body = await req.json();
 
     const updatedTournament = await prisma.tournament.update({
-      where: { id: params.id },
+      where: { id: tournamentId },
       data: {
         name: body.name || tournament.name,
       },
@@ -71,18 +79,19 @@ export async function PUT(
 
 export async function DELETE(
   req: Request,
-  { params }: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
   try {
     const session = await auth();
-
     if (!session?.user?.id) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      return new NextResponse("Unauthorized", { status: 401 });
     }
+
+    const { id: tournamentId } = await context.params;
 
     const tournament = await prisma.tournament.findFirst({
       where: {
-        id: params.id,
+        id: tournamentId,
         organizerId: session.user.id,
       },
     });
@@ -96,7 +105,7 @@ export async function DELETE(
 
     // Deleta o torneio (cascata deleta competitors e brackets)
     await prisma.tournament.delete({
-      where: { id: params.id },
+      where: { id: tournamentId },
     });
 
     return new NextResponse(null, { status: 204 });

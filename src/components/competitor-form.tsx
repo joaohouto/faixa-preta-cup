@@ -71,7 +71,7 @@ export function CompetitorForm({
   tournamentId,
   onCompetitorCreated,
 }: CompetitorFormProps) {
-  const form = useForm<CompetitorFormValues>({
+  const form = useForm({
     resolver: zodResolver(competitorSchema),
     defaultValues: {
       name: "",
@@ -127,7 +127,7 @@ export function CompetitorForm({
                 <FormItem>
                   <FormLabel>Nome</FormLabel>
                   <FormControl>
-                    <Input placeholder="e.g., John Doe" {...field} />
+                    <Input placeholder="e.g., John Doe" {...(field as any)} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -167,7 +167,7 @@ export function CompetitorForm({
                 <FormItem>
                   <FormLabel>Peso (kg)</FormLabel>
                   <FormControl>
-                    <Input type="number" {...field} />
+                    <Input type="number" {...(field as any)} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -180,7 +180,7 @@ export function CompetitorForm({
                 <FormItem>
                   <FormLabel>Data de Nascimento</FormLabel>
                   <FormControl>
-                    <Input type="date" {...field} />
+                    <Input type="date" {...(field as any)} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -220,7 +220,10 @@ export function CompetitorForm({
                 <FormItem>
                   <FormLabel>Escola/Associação</FormLabel>
                   <FormControl>
-                    <Input placeholder="e.g., Shotokan Karate" {...field} />
+                    <Input
+                      placeholder="e.g., Shotokan Karate"
+                      {...(field as any)}
+                    />
                   </FormControl>
                   <FormMessage />
                 </FormItem>

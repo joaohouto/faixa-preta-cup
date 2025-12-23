@@ -1,9 +1,10 @@
 import { redirect } from "next/navigation";
 
-export default function TournamentPage({
+export default async function TournamentPage({
   params,
 }: {
-  params: { tournamentId: string };
+  params: Promise<{ tournamentId: string }>;
 }) {
-  redirect(`/app/${params.tournamentId}/competitors`);
+  const resolved = await params;
+  redirect(`/app/${resolved.tournamentId}/competitors`);
 }

@@ -55,18 +55,25 @@ const genderLabels: Record<string, string> = {
 export default function CategoriesPage({
   params,
 }: {
-  params: { tournamentId: string };
+  params: Promise<{ tournamentId: string }>;
 }) {
   const [tournament, setTournament] = useState<Tournament | null>(null);
   const [kataCategories, setKataCategories] = useState<CategoryGroup[]>([]);
   const [kumiteCategories, setKumiteCategories] = useState<CategoryGroup[]>([]);
   const [loading, setLoading] = useState(true);
+  const [resolvedParams, setResolvedParams] = useState<{
+    tournamentId: string;
+  } | null>(null);
+
+  useEffect(() => {
+    params.then((p) => setResolvedParams(p));
+  }, [params]);
 
   useEffect(() => {
     async function fetchData() {
       try {
         const res = await fetch(
-          `/api/tournaments/${params.tournamentId}/categories`
+          `/api/tournaments/${resolvedParams!.tournamentId}/categories`
         );
 
         if (!res.ok) throw new Error("Failed to fetch categories");
@@ -83,8 +90,10 @@ export default function CategoriesPage({
       }
     }
 
+    if (!resolvedParams) return;
+
     fetchData();
-  }, [params.tournamentId]);
+  }, [resolvedParams?.tournamentId]);
 
   if (loading) {
     return (

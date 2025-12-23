@@ -5,7 +5,7 @@ import { FaixaPretaLogo } from "@/components/icon/faixa-preta-logo";
 export default function ScoreboardPage({
   params,
 }: {
-  params: { tournamentId: string };
+  params: Promise<{ tournamentId: string }>;
 }) {
   return (
     <div className="p-4 h-screen flex flex-col items-center justify-center gap-8">
