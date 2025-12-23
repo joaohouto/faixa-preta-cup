@@ -4,7 +4,7 @@ import { NextResponse } from "next/server";
 
 export async function DELETE(
   req: Request,
-  { params }: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
   try {
     const session = await auth();
@@ -13,9 +13,9 @@ export async function DELETE(
       return new NextResponse("Unauthorized", { status: 401 });
     }
 
-    const tournamentId = params.id;
+    const { id: tournamentId } = await context.params;
 
-    // Verifica se o usuário é o organizador do torneio
+    // Verificar ownership
     const tournament = await db.tournament.findUnique({
       where: { id: tournamentId },
     });
@@ -24,13 +24,37 @@ export async function DELETE(
       return new NextResponse("Unauthorized", { status: 401 });
     }
 
-    // Deleta todos os competidores do torneio
+    // Verificar se há chaves já iniciadas
+    const bracketsInProgress = await db.bracket.findFirst({
+      where: {
+        tournamentId,
+        status: {
+          in: ["IN_PROGRESS", "COMPLETED"],
+        },
+      },
+    });
+
+    if (bracketsInProgress) {
+      return new NextResponse(
+        "Não é possível excluir todos os competidores enquanto há chaves em andamento ou finalizadas.",
+        { status: 400 }
+      );
+    }
+
+    // Deletar todas as chaves não iniciadas
+    await db.bracket.deleteMany({
+      where: {
+        tournamentId,
+        status: "NOT_STARTED",
+      },
+    });
+
+    // Deletar todos os competidores
     const result = await db.competitor.deleteMany({
       where: { tournamentId },
     });
 
     return NextResponse.json({
-      success: true,
       deletedCount: result.count,
     });
   } catch (error) {

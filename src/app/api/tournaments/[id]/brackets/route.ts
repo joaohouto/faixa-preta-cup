@@ -7,10 +7,9 @@ import {
 } from "@/lib/utils/bracket-generator";
 import { Modality } from "@prisma/client";
 
-// POST - Gerar chave para uma categoria específica
 export async function POST(
   req: Request,
-  { params }: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
   try {
     const session = await auth();
@@ -18,7 +17,7 @@ export async function POST(
       return new NextResponse("Unauthorized", { status: 401 });
     }
 
-    const tournamentId = params.id;
+    const { id: tournamentId } = await context.params;
     const body = await req.json();
     const { category, modality, generateAll } = body;
 
@@ -185,10 +184,9 @@ export async function POST(
   }
 }
 
-// GET - Listar todas as chaves do torneio
 export async function GET(
   req: Request,
-  { params }: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
   try {
     const session = await auth();
@@ -196,7 +194,7 @@ export async function GET(
       return new NextResponse("Unauthorized", { status: 401 });
     }
 
-    const tournamentId = params.id;
+    const { id: tournamentId } = await context.params;
 
     // Verificar ownership
     const tournament = await db.tournament.findUnique({

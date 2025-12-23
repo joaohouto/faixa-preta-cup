@@ -3,6 +3,8 @@ import { db } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 import { Competitor } from "@prisma/client";
 
+export const dynamic = "force-dynamic";
+
 function groupByCategory(
   competitors: Competitor[],
   field: "kataCategory" | "kumiteCategory"

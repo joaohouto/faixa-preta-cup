@@ -9,7 +9,7 @@ import { NextResponse } from "next/server";
 
 export async function POST(
   req: Request,
-  { params }: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
   try {
     const session = await auth();
@@ -18,7 +18,7 @@ export async function POST(
       return new NextResponse("Unauthorized", { status: 401 });
     }
 
-    const tournamentId = params.id;
+    const { id: tournamentId } = await context.params;
     const body = await req.json();
 
     // Verifica se o usuário é o organizador do torneio
@@ -74,7 +74,7 @@ export async function POST(
 
 export async function GET(
   req: Request,
-  { params }: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
   try {
     const session = await auth();
@@ -83,7 +83,7 @@ export async function GET(
       return new NextResponse("Unauthorized", { status: 401 });
     }
 
-    const tournamentId = params.id;
+    const { id: tournamentId } = await context.params;
 
     // Verifica se o usuário é o organizador do torneio
     const tournament = await db.tournament.findUnique({

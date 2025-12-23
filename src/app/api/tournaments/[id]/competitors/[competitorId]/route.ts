@@ -1,15 +1,15 @@
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/prisma";
 import {
-  calculateAge,
-  getKataCategory,
-  getKumiteCategory,
+  calcularIdade,
+  getCategoriaKata,
+  getCategoriaKumite,
 } from "@/lib/utils/classification";
 import { NextResponse } from "next/server";
 
 export async function PUT(
   req: Request,
-  { params }: { params: { id: string; competitorId: string } }
+  context: { params: Promise<{ id: string; competitorId: string }> }
 ) {
   try {
     const session = await auth();
@@ -18,40 +18,21 @@ export async function PUT(
       return new NextResponse("Unauthorized", { status: 401 });
     }
 
-    const tournamentId = params.id;
-    const competitorId = params.competitorId;
     const body = await req.json();
-
-    // Verifica se o usuário é o organizador do torneio
-    const tournament = await db.tournament.findUnique({
-      where: { id: tournamentId },
-    });
-
-    if (!tournament || tournament.organizerId !== session.user.id) {
-      return new NextResponse("Unauthorized", { status: 401 });
-    }
-
-    // Verifica se o competidor pertence ao torneio
-    const competitor = await db.competitor.findUnique({
-      where: { id: competitorId },
-    });
-
-    if (!competitor || competitor.tournamentId !== tournamentId) {
-      return new NextResponse("Competitor not found", { status: 404 });
-    }
+    const { competitorId } = await context.params;
 
     const competitorData = {
       ...body,
       birthdate: new Date(body.birthdate),
     };
 
-    const age = calculateAge(competitorData.birthdate);
-    const kataCategory = competitorData.kata
-      ? getKataCategory(age, competitorData.gender, competitorData.belt)
+    const idade = calcularIdade(competitorData.birthdate);
+    const categoriaKata = competitorData.kata
+      ? getCategoriaKata(idade, competitorData.gender, competitorData.belt)
       : null;
-    const kumiteCategory = competitorData.kumite
-      ? getKumiteCategory(
-          age,
+    const categoriaKumite = competitorData.kumite
+      ? getCategoriaKumite(
+          idade,
           competitorData.gender,
           competitorData.weight,
           competitorData.belt
@@ -61,17 +42,10 @@ export async function PUT(
     const updatedCompetitor = await db.competitor.update({
       where: { id: competitorId },
       data: {
-        name: competitorData.name,
-        gender: competitorData.gender,
-        weight: competitorData.weight,
-        birthdate: competitorData.birthdate,
-        belt: competitorData.belt,
-        school: competitorData.school,
-        kata: competitorData.kata,
-        kumite: competitorData.kumite,
-        age,
-        kataCategory,
-        kumiteCategory,
+        ...competitorData,
+        age: idade,
+        kataCategory: categoriaKata,
+        kumiteCategory: categoriaKumite,
       },
     });
 
@@ -84,7 +58,7 @@ export async function PUT(
 
 export async function DELETE(
   req: Request,
-  { params }: { params: { id: string; competitorId: string } }
+  context: { params: Promise<{ id: string; competitorId: string }> }
 ) {
   try {
     const session = await auth();
@@ -93,10 +67,9 @@ export async function DELETE(
       return new NextResponse("Unauthorized", { status: 401 });
     }
 
-    const tournamentId = params.id;
-    const competitorId = params.competitorId;
+    const { id: tournamentId, competitorId } = await context.params;
 
-    // Verifica se o usuário é o organizador do torneio
+    // Verificar ownership do torneio
     const tournament = await db.tournament.findUnique({
       where: { id: tournamentId },
     });
@@ -105,7 +78,7 @@ export async function DELETE(
       return new NextResponse("Unauthorized", { status: 401 });
     }
 
-    // Verifica se o competidor pertence ao torneio
+    // Verificar se competidor existe
     const competitor = await db.competitor.findUnique({
       where: { id: competitorId },
     });
@@ -114,6 +87,37 @@ export async function DELETE(
       return new NextResponse("Competitor not found", { status: 404 });
     }
 
+    // VERIFICAR SE COMPETIDOR ESTÁ EM ALGUMA CHAVE
+    const matchesWithCompetitor = await db.match.findFirst({
+      where: {
+        OR: [{ akaId: competitorId }, { aoId: competitorId }],
+        bracket: {
+          tournamentId,
+        },
+      },
+      include: {
+        bracket: true,
+      },
+    });
+
+    if (matchesWithCompetitor) {
+      // Se a chave ainda não iniciou, podemos regenerar
+      if (matchesWithCompetitor.bracket.status === "NOT_STARTED") {
+        // Deletar o bracket inteiro para ser regenerado
+        await db.bracket.delete({
+          where: { id: matchesWithCompetitor.bracket.id },
+        });
+      } else {
+        // Se já iniciou, bloquear a exclusão
+        return new NextResponse(
+          "Não é possível excluir competidor que está em uma chave já iniciada. Categoria: " +
+            matchesWithCompetitor.bracket.category,
+          { status: 400 }
+        );
+      }
+    }
+
+    // Deletar competidor
     await db.competitor.delete({
       where: { id: competitorId },
     });
