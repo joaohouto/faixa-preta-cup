@@ -3,13 +3,14 @@
 import { useEffect, useState } from "react";
 import { Match, Bracket, Competitor } from "@prisma/client";
 import { toast } from "sonner";
-import { ArrowLeft, Trophy, Medal } from "lucide-react";
+import { ArrowLeft, Trophy, Medal, Play, Flag } from "lucide-react";
 import Link from "next/link";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { MatchResultDialog } from "@/components/match-result-dialog";
 
 type MatchWithCompetitors = Match & {
   aka?: Competitor;
@@ -32,6 +33,15 @@ export default function BracketDetailPage({
     tournamentId: string;
     bracketId: string;
   } | null>(null);
+
+  const [selectedMatch, setSelectedMatch] =
+    useState<MatchWithCompetitors | null>(null);
+  const [resultDialogOpen, setResultDialogOpen] = useState(false);
+
+  function handleOpenResult(match: MatchWithCompetitors) {
+    setSelectedMatch(match);
+    setResultDialogOpen(true);
+  }
 
   useEffect(() => {
     params.then((p) => setResolvedParams(p));
@@ -156,9 +166,18 @@ export default function BracketDetailPage({
           </div>
         </div>
 
+        <Button asChild variant="outline">
+          <Link
+            href={`/app/${resolvedParams?.tournamentId}/brackets/${resolvedParams?.bracketId}/referee`}
+          >
+            <Flag />
+            Painel de Árbitro
+          </Link>
+        </Button>
+
         {/* Campeão */}
         {champion && (
-          <Card className="bg-yellow-50 border-yellow-200 dark:bg-yellow-950 dark:border-yellow-800">
+          <Card className="bg-yellow-50 border-yellow-200 dark:bg-yellow-950 dark:border-yellow-800 p-0">
             <CardContent className="p-4 flex items-center gap-3">
               <Trophy className="h-6 w-6 text-yellow-600 dark:text-yellow-400" />
               <div>
@@ -184,7 +203,6 @@ export default function BracketDetailPage({
           <Card>
             <CardContent className="p-6 overflow-x-auto">
               <div className="flex min-w-max pb-12">
-                {" "}
                 {/* Adicionado pb-12 para scroll seguro */}
                 {rounds.map((roundNum, index) => {
                   const roundMatches = matchesByRound[roundNum].filter(
@@ -230,7 +248,12 @@ export default function BracketDetailPage({
                             <div key={match.id} className="h-[128px]">
                               {" "}
                               {/* Força altura exata */}
-                              <MatchCard match={match} onRefresh={fetchData} />
+                              <MatchCard
+                                key={match.id}
+                                match={match}
+                                onRefresh={fetchData}
+                                onOpenResult={handleOpenResult}
+                              />
                             </div>
                           ))}
                         </div>
@@ -239,7 +262,6 @@ export default function BracketDetailPage({
                       {/* Linhas de Conexão (exceto após a final) */}
                       {!isFinal && (
                         <div className="mt-12">
-                          {" "}
                           {/* mt-12 para compensar o header do título */}
                           <BracketConnectors
                             roundIndex={index} // Passamos o índice 0-based
@@ -252,10 +274,23 @@ export default function BracketDetailPage({
                 })}
               </div>
 
-              {/* Match de 3º Lugar (mantém igual) */}
+              {/* Match de 3º Lugar */}
               {thirdPlaceMatch && (
-                /* ... código existente do 3º lugar ... */
-                <div className="mt-12 pt-8 border-t">{/* ... */}</div>
+                <div className="mt-12 pt-8 border-t">
+                  <div className="text-center mb-6">
+                    <Badge variant="secondary" className="font-semibold">
+                      DISPUTA DE 3º LUGAR
+                    </Badge>
+                  </div>
+                  <div className="flex justify-center">
+                    <MatchCard
+                      match={thirdPlaceMatch}
+                      onRefresh={fetchData}
+                      isThirdPlace
+                      onOpenResult={handleOpenResult}
+                    />
+                  </div>
+                </div>
               )}
             </CardContent>
           </Card>
@@ -395,6 +430,15 @@ export default function BracketDetailPage({
           </div>
         </TabsContent>
       </Tabs>
+
+      <MatchResultDialog
+        match={selectedMatch}
+        open={resultDialogOpen}
+        onOpenChange={setResultDialogOpen}
+        onSuccess={fetchData}
+        tournamentId={resolvedParams?.tournamentId!}
+        bracketId={resolvedParams?.bracketId!}
+      />
     </div>
   );
 }
@@ -403,17 +447,26 @@ export default function BracketDetailPage({
 function MatchCard({
   match,
   onRefresh,
+  onOpenResult,
   isThirdPlace = false,
 }: {
   match: MatchWithCompetitors;
   onRefresh: () => void;
+  onOpenResult: (match: MatchWithCompetitors) => void;
   isThirdPlace?: boolean;
 }) {
+  const canEdit = match.aka && match.ao && !match.isBye;
+
   return (
     <Card
-      className={`w-56 p-0 ${
-        match.isBye ? "bg-muted/50" : "hover:shadow-md transition-shadow"
+      className={`w-56 p-0 z-10 ${
+        match.isBye
+          ? "bg-muted/50"
+          : canEdit
+          ? "hover:shadow-lg transition-all cursor-pointer hover:scale-105"
+          : "opacity-60"
       }`}
+      onClick={() => canEdit && onOpenResult(match)}
     >
       <CardContent className="p-0 relative">
         {/* Aka */}
@@ -472,6 +525,13 @@ function MatchCard({
         {match.isBye && (
           <div className="absolute inset-0 flex items-center justify-center bg-muted/80 rounded-lg">
             <Badge variant="secondary">BYE</Badge>
+          </div>
+        )}
+
+        {/* Indicador de que pode clicar */}
+        {canEdit && !match.isCompleted && (
+          <div className="absolute top-2 right-2">
+            <div className="h-2 w-2 bg-blue-500 rounded-full animate-pulse" />
           </div>
         )}
       </CardContent>

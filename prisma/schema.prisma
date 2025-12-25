@@ -181,3 +181,43 @@ model Match {
   @@index([isThirdPlace])
   @@index([isFourthPlace])
 }
+
+model LiveMatch {
+  id           String @id @default(auto()) @map("_id") @db.ObjectId
+  tournamentId String @unique @db.ObjectId // ← ÚNICO por torneio
+  matchId      String @db.ObjectId
+  bracketId    String @db.ObjectId
+
+  // Dados dos competidores (desnormalizado para performance)
+  akaId     String @db.ObjectId
+  akaName   String
+  akaSchool String
+  aoId      String @db.ObjectId
+  aoName    String
+  aoSchool  String
+
+  // Categoria
+  category String
+  modality String
+  round    Int
+  position Int
+
+  // Estado atual da luta
+  akaScore  Int     @default(0)
+  aoScore   Int     @default(0)
+  akaChui   Int     @default(0)
+  aoChui    Int     @default(0)
+  akaSenshu Boolean @default(false)
+  aoSenshu  Boolean @default(false)
+
+  // Timer
+  timeRemaining Int     @default(120)
+  timerRunning  Boolean @default(false)
+
+  // Controle
+  isActive  Boolean  @default(true)
+  startedAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([matchId])
+}

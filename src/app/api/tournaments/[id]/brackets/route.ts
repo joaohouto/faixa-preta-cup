@@ -82,8 +82,10 @@ export async function POST(
           competitors: comps,
         });
 
-        await propagateByeWinners(bracket.id);
-        createdBrackets.push(bracket);
+        if (bracket) {
+          await propagateByeWinners(bracket.id);
+          createdBrackets.push(bracket);
+        }
       }
 
       // Gerar brackets para Kumite
@@ -108,8 +110,10 @@ export async function POST(
           competitors: comps,
         });
 
-        await propagateByeWinners(bracket.id);
-        createdBrackets.push(bracket);
+        if (bracket) {
+          await propagateByeWinners(bracket.id);
+          createdBrackets.push(bracket);
+        }
       }
 
       return NextResponse.json({
@@ -175,7 +179,9 @@ export async function POST(
     });
 
     // Propagar vencedores dos byes
-    await propagateByeWinners(bracket.id);
+    if (bracket) {
+      await propagateByeWinners(bracket.id);
+    }
 
     return NextResponse.json(bracket);
   } catch (error) {

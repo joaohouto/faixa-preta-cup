@@ -67,19 +67,15 @@ export function Header({
           icon: UsersIcon,
         },
         {
-          href: `/app/${currentTournamentId}/categories`,
-          label: "Categorias",
-          icon: FileTextIcon,
-        },
-        {
           href: `/app/${currentTournamentId}/brackets`,
-          label: "Chaves",
+          label: "Categorias e Chaves",
           icon: LayersIcon,
         },
         {
           href: `/app/${currentTournamentId}/scoreboard`,
-          label: "Painel de Pontos",
+          label: "Scoreboard",
           icon: Presentation,
+          target: "_blank",
         },
       ]
     : [];
@@ -191,7 +187,7 @@ export function Header({
                             asChild
                             className="flex size-8 items-center justify-center p-1.5"
                           >
-                            <Link href={link.href}>
+                            <Link href={link.href} target={link.target}>
                               <link.icon size={20} aria-hidden="true" />
                               <span className="sr-only">{link.label}</span>
                             </Link>

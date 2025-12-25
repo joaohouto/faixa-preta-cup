@@ -17,6 +17,11 @@ function nextPowerOf2(n: number): number {
 export async function generateBracket(input: BracketGenerationInput) {
   const { tournamentId, category, modality, competitors } = input;
 
+  if (competitors.length < 2) {
+    console.warn("Not enough competitors to generate a bracket");
+    return null;
+  }
+
   // Calcular estrutura
   const totalSlots = nextPowerOf2(competitors.length);
   const totalRounds = Math.log2(totalSlots);
@@ -40,7 +45,9 @@ export async function generateBracket(input: BracketGenerationInput) {
   await generateSubsequentRounds(bracket.id, totalRounds, totalSlots);
 
   // Criar match de terceiro lugar
-  await createThirdPlaceMatch(bracket.id, totalRounds);
+  if (competitors.length >= 4) {
+    await createThirdPlaceMatch(bracket.id, totalRounds);
+  }
 
   return bracket;
 }

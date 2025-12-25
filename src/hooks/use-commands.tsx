@@ -6,12 +6,6 @@ import { useTheme } from "next-themes";
 export function CommandPalette() {
   const { theme, setTheme } = useTheme();
 
-  const hotKeysOptions = {
-    preventDefault: true,
-    enableOnFormTags: true,
-    enableOnContentEditable: true,
-  };
-
   useHotkeys(
     "ctrl+shift+l",
     () => {
@@ -21,7 +15,11 @@ export function CommandPalette() {
         setTheme("light");
       }
     },
-    hotKeysOptions
+    {
+      preventDefault: true,
+      enableOnFormTags: true,
+      enableOnContentEditable: true,
+    }
   );
 
   return null;

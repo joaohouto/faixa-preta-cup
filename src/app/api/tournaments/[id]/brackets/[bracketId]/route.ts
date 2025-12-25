@@ -43,6 +43,8 @@ export async function GET(
   }
 }
 
+// /app/api/tournaments/[id]/brackets/[bracketId]/route.ts
+
 export async function DELETE(
   req: Request,
   context: { params: Promise<{ id: string; bracketId: string }> }
@@ -73,14 +75,10 @@ export async function DELETE(
       return new NextResponse("Bracket not found", { status: 404 });
     }
 
-    // Não permitir deletar chaves já iniciadas
-    if (bracket.status !== "NOT_STARTED") {
-      return new NextResponse("Não é possível excluir chaves já iniciadas", {
-        status: 400,
-      });
-    }
+    // ✅ REMOVER A RESTRIÇÃO - Permitir deletar mesmo se iniciada
+    // Antes só permitia NOT_STARTED, agora permite qualquer status
 
-    // Deletar bracket (cascade vai deletar os matches)
+    // Deletar bracket (cascade vai deletar os matches automaticamente)
     await db.bracket.delete({
       where: { id: bracketId },
     });
