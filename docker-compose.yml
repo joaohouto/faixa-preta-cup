@@ -8,10 +8,16 @@ services:
     environment:
       MONGO_INITDB_ROOT_USERNAME: sensei
       MONGO_INITDB_ROOT_PASSWORD: zanshin
+      MONGO_INITDB_DATABASE: faixa_preta_cup
     container_name: mongodb_faixapreta_cup
     volumes:
       - mongo_data_faixapreta_cup:/data/db
     restart: always
+    healthcheck:
+      test: ["CMD", "mongo", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
 volumes:
   mongo_data_faixapreta_cup:

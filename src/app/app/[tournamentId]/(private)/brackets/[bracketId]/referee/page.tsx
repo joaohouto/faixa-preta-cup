@@ -21,6 +21,22 @@ import { Badge } from "@/components/ui/badge";
 import { useHotkeys } from "react-hotkeys-hook";
 import { cn } from "@/lib/utils";
 import { Spinner } from "@/components/luxe/spinner";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  AlertDialog,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 type MatchWithCompetitors = Match & {
   aka?: Competitor;
@@ -37,6 +53,34 @@ type LiveMatchState = {
   aoSenshu: boolean;
   timeRemaining: number;
   timerRunning: boolean;
+};
+
+const TIME_OPTIONS = [
+  { label: "1 minuto", value: 60 },
+  { label: "1:30 minutos", value: 90 },
+  { label: "2 minutos", value: 120 },
+  { label: "2:30 minutos", value: 150 },
+  { label: "3 minutos", value: 180 },
+];
+
+// Função para determinar o tipo de luta
+const getMatchTypeLabel = (
+  match: MatchWithCompetitors,
+  bracket: Bracket | null
+): { label: string; variant: "default" | "secondary" | "destructive" } => {
+  if (match.isThirdPlace) {
+    return { label: "3º LUGAR", variant: "destructive" };
+  }
+  if (match.isFourthPlace) {
+    return { label: "4º LUGAR", variant: "secondary" };
+  }
+  if (bracket && match.round === bracket.totalRounds) {
+    return { label: "FINAL", variant: "default" };
+  }
+  if (bracket && match.round === bracket.totalRounds - 1) {
+    return { label: "SEMIFINAL", variant: "secondary" };
+  }
+  return { label: "", variant: "secondary" };
 };
 
 export default function RefereePage({
@@ -68,6 +112,10 @@ export default function RefereePage({
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
+  const [selectedDuration, setSelectedDuration] = useState(120);
+  const [showWinnerDialog, setShowWinnerDialog] = useState(false);
+  const [selectedWinner, setSelectedWinner] = useState<string | null>(null);
+
   useHotkeys(
     "space",
     () => {
@@ -90,6 +138,17 @@ export default function RefereePage({
   useEffect(() => {
     if (!resolvedParams) return;
     loadData();
+  }, [resolvedParams]);
+
+  // Limpar live match ao sair da página
+  useEffect(() => {
+    return () => {
+      if (resolvedParams?.tournamentId) {
+        fetch(`/api/live-match?tournamentId=${resolvedParams.tournamentId}`, {
+          method: "DELETE",
+        });
+      }
+    };
   }, [resolvedParams]);
 
   useEffect(() => {
@@ -195,13 +254,24 @@ export default function RefereePage({
   async function saveResult() {
     if (!currentMatch) return;
 
+    // Se placar empate, perguntar vencedor
+    if (liveState.akaScore === liveState.aoScore) {
+      setShowWinnerDialog(true);
+      return;
+    }
+
     const winnerId =
       liveState.akaScore > liveState.aoScore
-        ? currentMatch.akaId
-        : currentMatch.aoId;
+        ? currentMatch.akaId! // NEED TO VERIFY NON-NULL
+        : currentMatch.aoId!;
+
+    await finalizeSave(winnerId, false);
+  }
+
+  async function finalizeSave(winnerId: string, hantei: boolean) {
+    if (!currentMatch) return;
 
     setSaving(true);
-
     try {
       await fetch(
         `/api/tournaments/${resolvedParams!.tournamentId}/brackets/${
@@ -214,7 +284,7 @@ export default function RefereePage({
             akaScore: liveState.akaScore,
             aoScore: liveState.aoScore,
             winnerId,
-            decisionByHantei: liveState.akaScore === liveState.aoScore,
+            decisionByHantei: hantei,
           }),
         }
       );
@@ -222,13 +292,28 @@ export default function RefereePage({
       // Recarregar dados
       await loadData();
 
-      // Verificar se há mais lutas pendentes
       const hasMoreMatches = allMatches.some(
         (m) => !m.isCompleted && m.id !== currentMatch.id
       );
 
-      // Se não houver mais lutas, limpar live match
+      // Se não houver mais lutas, mostrar campeão antes de excluir
       if (!hasMoreMatches) {
+        // Notificar campeão final
+        const finalMatch = allMatches.find(
+          (m) => m.round === bracket?.totalRounds && !m.isThirdPlace
+        );
+        if (finalMatch) {
+          const champion =
+            finalMatch.winnerId === finalMatch.akaId ? "aka" : "ao";
+
+          // Enviar notificação de campeão
+          await broadcastChampion(champion);
+
+          // Aguardar 5 segundos para mostrar no scoreboard
+          await new Promise((resolve) => setTimeout(resolve, 5000));
+        }
+
+        // Agora limpar live match
         await fetch(
           `/api/live-match?tournamentId=${resolvedParams!.tournamentId}`,
           { method: "DELETE" }
@@ -237,11 +322,33 @@ export default function RefereePage({
 
       toast.success("Resultado salvo!");
       resetState();
+      setShowWinnerDialog(false);
     } catch (error) {
       toast.error("Erro ao salvar resultado");
     } finally {
       setSaving(false);
     }
+  }
+
+  async function broadcastChampion(winner: "aka" | "ao") {
+    // Enviar notificação especial de campeão
+    await fetch(`/api/live-match`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        tournamentId: resolvedParams!.tournamentId,
+        matchId: "champion",
+        bracketId: resolvedParams!.bracketId,
+        ...liveState,
+        champion: winner,
+      }),
+    });
+  }
+
+  function handleTimeChange(value: string) {
+    const newTime = parseInt(value);
+    setSelectedDuration(newTime);
+    setLiveState((prev) => ({ ...prev, timeRemaining: newTime }));
   }
 
   function resetState() {
@@ -401,13 +508,16 @@ export default function RefereePage({
           <div className="text-center flex-1">
             <h1 className="text-2xl font-bold">Painel do Árbitro</h1>
             <div className="flex items-center justify-center gap-2 mt-1">
-              <Badge variant="secondary">{bracket?.modality || "N/A"}</Badge>
               <span className="text-sm text-muted-foreground">
                 {bracket?.category || "N/A"}
               </span>
             </div>
             <p className="text-xs text-muted-foreground mt-1">
               Rodada {currentMatch.round} - Luta {currentMatch.position + 1}
+              {(() => {
+                const matchType = getMatchTypeLabel(currentMatch, bracket);
+                return matchType.label ? ` • ${matchType.label}` : "";
+              })()}
             </p>
           </div>
 
@@ -422,9 +532,35 @@ export default function RefereePage({
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Painel Principal */}
           <div className="lg:col-span-2 space-y-6">
-            {/* Timer */}
+            {/* Timer com Seletor de Duração */}
             <Card className="p-0">
-              <CardContent className="p-8">
+              <CardContent className="p-8 space-y-4">
+                {/* Seletor de Duração */}
+                <div className="flex items-center justify-center gap-4">
+                  <span className="text-sm text-muted-foreground">
+                    Duração:
+                  </span>
+                  <Select
+                    value={selectedDuration.toString()}
+                    onValueChange={handleTimeChange}
+                  >
+                    <SelectTrigger className="w-[180px]">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {TIME_OPTIONS.map((option) => (
+                        <SelectItem
+                          key={option.value}
+                          value={option.value.toString()}
+                        >
+                          {option.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Timer */}
                 <div className="flex items-center justify-center gap-6">
                   <Button
                     size="lg"
@@ -447,8 +583,8 @@ export default function RefereePage({
                     className={cn(
                       "text-8xl font-mono font-semibold",
                       liveState.timerRunning
-                        ? "text-foreground"
-                        : "text-muted-foreground"
+                        ? "text-yellow-400"
+                        : "text-foreground"
                     )}
                   >
                     {String(minutes).padStart(2, "0")}:
@@ -459,7 +595,10 @@ export default function RefereePage({
                     size="lg"
                     variant="outline"
                     onClick={() =>
-                      setLiveState((prev) => ({ ...prev, timeRemaining: 120 }))
+                      setLiveState((prev) => ({
+                        ...prev,
+                        timeRemaining: selectedDuration,
+                      }))
                     }
                   >
                     <RotateCcw className="h-6 w-6" />
@@ -676,41 +815,107 @@ export default function RefereePage({
                 <CardTitle className="text-lg">Lutas da Chave</CardTitle>
               </CardHeader>
               <CardContent className="space-y-2 max-h-[600px] overflow-y-auto">
-                {allMatches.map((match, index) => (
-                  <div
-                    key={match.id}
-                    className={cn(
-                      "p-3 rounded-lg border text-sm",
-                      match.id === currentMatch.id
-                        ? "border-primary bg-primary/5"
-                        : match.isCompleted
-                        ? "border-green-500/30 bg-green-500/5"
-                        : "border-border"
-                    )}
-                  >
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="text-xs text-muted-foreground">
-                        R{match.round} - L{match.position + 1}
-                      </span>
-                      {match.isCompleted && (
-                        <CheckCircle className="h-3 w-3 text-green-600" />
+                {allMatches.map((match, index) => {
+                  const matchType = getMatchTypeLabel(match, bracket);
+                  return (
+                    <div
+                      key={match.id}
+                      className={cn(
+                        "p-3 rounded-lg border text-sm",
+                        match.id === currentMatch.id
+                          ? "border-primary bg-primary/5"
+                          : match.isCompleted
+                          ? "border-green-500/30 bg-green-500/5"
+                          : "border-border"
                       )}
-                      {match.id === currentMatch.id && (
-                        <Badge variant="default" className="text-xs">
-                          Atual
-                        </Badge>
-                      )}
+                    >
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-xs text-muted-foreground">
+                          R{match.round} - L{match.position + 1}
+                        </span>
+                        <div className="flex items-center gap-1">
+                          {matchType.label && (
+                            <Badge
+                              variant={matchType.variant}
+                              className="text-xs"
+                            >
+                              {matchType.label}
+                            </Badge>
+                          )}
+                          {match.isCompleted && (
+                            <CheckCircle className="h-3 w-3 text-green-600" />
+                          )}
+                          {match.id === currentMatch.id && (
+                            <Badge variant="default" className="text-xs">
+                              Atual
+                            </Badge>
+                          )}
+                        </div>
+                      </div>
+                      <div className="font-medium">{match.aka?.name}</div>
+                      <div className="text-muted-foreground text-xs">vs</div>
+                      <div className="font-medium">{match.ao?.name}</div>
                     </div>
-                    <div className="font-medium">{match.aka?.name}</div>
-                    <div className="text-muted-foreground text-xs">vs</div>
-                    <div className="font-medium">{match.ao?.name}</div>
-                  </div>
-                ))}
+                  );
+                })}
               </CardContent>
             </Card>
           </div>
         </div>
       </div>
+
+      {/* Dialog de Decisão por Hantei */}
+      <AlertDialog open={showWinnerDialog} onOpenChange={setShowWinnerDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Placar Empatado</AlertDialogTitle>
+            <AlertDialogDescription>
+              O placar está {liveState.akaScore} x {liveState.aoScore}.
+              <br />
+              Qual competidor venceu por decisão dos árbitros (Hantei)?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="grid grid-cols-2 gap-4 py-4">
+            <Button
+              size="lg"
+              variant="outline"
+              className="h-20 border-red-500 hover:bg-red-50"
+              onClick={() => {
+                setSelectedWinner(currentMatch!.akaId!);
+                finalizeSave(currentMatch!.akaId!, true);
+              }}
+              disabled={saving}
+            >
+              <div className="text-center">
+                <div className="font-bold text-lg text-red-500">AKA</div>
+                <div className="text-sm text-muted-foreground">
+                  {currentMatch?.aka?.name}
+                </div>
+              </div>
+            </Button>
+            <Button
+              size="lg"
+              variant="outline"
+              className="h-20 border-blue-500 hover:bg-blue-50"
+              onClick={() => {
+                setSelectedWinner(currentMatch!.aoId!);
+                finalizeSave(currentMatch!.aoId!, true);
+              }}
+              disabled={saving}
+            >
+              <div className="text-center">
+                <div className="font-bold text-lg text-blue-500">AO</div>
+                <div className="text-sm text-muted-foreground">
+                  {currentMatch?.ao?.name}
+                </div>
+              </div>
+            </Button>
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={saving}>Cancelar</AlertDialogCancel>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

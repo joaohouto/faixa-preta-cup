@@ -1,4 +1,5 @@
 import {
+  File,
   FileTextIcon,
   LayersIcon,
   Presentation,
@@ -70,6 +71,11 @@ export function Header({
           href: `/app/${currentTournamentId}/brackets`,
           label: "Categorias e Chaves",
           icon: LayersIcon,
+        },
+        {
+          href: `/app/${currentTournamentId}/results`,
+          label: "Resultados",
+          icon: FileTextIcon,
         },
         {
           href: `/app/${currentTournamentId}/scoreboard`,

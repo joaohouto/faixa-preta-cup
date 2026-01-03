@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
+import type { Resolver } from "react-hook-form";
 import { z } from "zod";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
@@ -83,7 +84,7 @@ export function MatchResultDialog({
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const form = useForm<ResultFormValues>({
-    resolver: zodResolver(resultSchema),
+    resolver: zodResolver(resultSchema) as Resolver<ResultFormValues>,
     defaultValues: {
       akaScore: match?.akaScore ?? 0,
       aoScore: match?.aoScore ?? 0,

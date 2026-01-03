@@ -197,10 +197,11 @@ model LiveMatch {
   aoSchool  String
 
   // Categoria
-  category String
-  modality String
-  round    Int
-  position Int
+  category    String
+  modality    String
+  round       Int
+  position    Int
+  totalRounds Int    @default(4) // Total de rodadas do bracket
 
   // Estado atual da luta
   akaScore  Int     @default(0)
