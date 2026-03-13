@@ -2,6 +2,8 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Belt, Gender } from "@prisma/client";
+import { Loader2 } from "lucide-react";
+import { useState } from "react";
 import { useForm } from "react-hook-form";
 import type { Resolver } from "react-hook-form";
 
@@ -37,7 +39,6 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
 
-
 interface CompetitorFormProps {
   tournamentId: string;
   onCompetitorCreated: () => void;
@@ -47,6 +48,8 @@ export function CompetitorForm({
   tournamentId,
   onCompetitorCreated,
 }: CompetitorFormProps) {
+  const [open, setOpen] = useState(false);
+
   const form = useForm<CompetitorFormValues>({
     resolver: zodResolver(competitorSchema) as Resolver<CompetitorFormValues>,
     defaultValues: {
@@ -61,32 +64,32 @@ export function CompetitorForm({
     },
   });
 
+  const { isSubmitting } = form.formState;
+
   async function onSubmit(values: CompetitorFormValues) {
     try {
       const response = await fetch(
         `/api/tournaments/${tournamentId}/competitors`,
         {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify(values),
         }
       );
 
-      if (!response.ok) {
-        throw new Error("Failed to create competitor");
-      }
+      if (!response.ok) throw new Error("Failed to create competitor");
 
-      toast.success("Competitor created successfully!");
-      onCompetitorCreated(); // Refresh list
-    } catch (error) {
-      toast.error("Failed to create competitor.");
+      toast.success("Competidor registrado com sucesso!");
+      form.reset();
+      setOpen(false);
+      onCompetitorCreated();
+    } catch {
+      toast.error("Falha ao registrar competidor.");
     }
   }
 
   return (
-    <Dialog>
+    <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
         <Button>Registrar Competidor</Button>
       </DialogTrigger>
@@ -103,7 +106,7 @@ export function CompetitorForm({
                 <FormItem>
                   <FormLabel>Nome</FormLabel>
                   <FormControl>
-                    <Input placeholder="e.g., John Doe" {...field} />
+                    <Input placeholder="Ex: João Silva" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -143,7 +146,7 @@ export function CompetitorForm({
                 <FormItem>
                   <FormLabel>Peso (kg)</FormLabel>
                   <FormControl>
-                    <Input type="number" {...field} />
+                    <Input type="number" step="0.1" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -178,9 +181,9 @@ export function CompetitorForm({
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      {Object.values(Belt).map((b) => (
-                        <SelectItem key={b} value={b}>
-                          {b}
+                      {Object.entries(beltLabels).map(([value, label]) => (
+                        <SelectItem key={value} value={value}>
+                          {label}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -196,10 +199,7 @@ export function CompetitorForm({
                 <FormItem>
                   <FormLabel>Escola/Associação</FormLabel>
                   <FormControl>
-                    <Input
-                      placeholder="e.g., Shotokan Karate"
-                      {...field}
-                    />
+                    <Input placeholder="Ex: Shotokan Karate" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -210,7 +210,7 @@ export function CompetitorForm({
                 control={form.control}
                 name="kata"
                 render={({ field }) => (
-                  <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm">
+                  <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm flex-1">
                     <FormLabel>Kata</FormLabel>
                     <FormControl>
                       <Switch
@@ -225,7 +225,7 @@ export function CompetitorForm({
                 control={form.control}
                 name="kumite"
                 render={({ field }) => (
-                  <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm">
+                  <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm flex-1">
                     <FormLabel>Kumite</FormLabel>
                     <FormControl>
                       <Switch
@@ -237,7 +237,16 @@ export function CompetitorForm({
                 )}
               />
             </div>
-            <Button type="submit">Registrar</Button>
+            <Button type="submit" className="w-full" disabled={isSubmitting}>
+              {isSubmitting ? (
+                <>
+                  <Loader2 className="animate-spin" />
+                  Registrando...
+                </>
+              ) : (
+                "Registrar"
+              )}
+            </Button>
           </form>
         </Form>
       </DialogContent>

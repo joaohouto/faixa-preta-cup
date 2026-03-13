@@ -5,7 +5,7 @@ import { Belt, Competitor, Gender } from "@prisma/client";
 import { useForm } from "react-hook-form";
 import type { Resolver } from "react-hook-form";
 import { useEffect, useState } from "react";
-import { Trash2 } from "lucide-react";
+import { Loader2, Trash2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -63,6 +63,7 @@ export function CompetitorEditDialog({
   onCompetitorUpdated,
 }: CompetitorEditDialogProps) {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const form = useForm<CompetitorFormValues>({
     resolver: zodResolver(competitorSchema) as Resolver<CompetitorFormValues>,
@@ -77,6 +78,8 @@ export function CompetitorEditDialog({
       kumite: false,
     },
   });
+
+  const { isSubmitting } = form.formState;
 
   useEffect(() => {
     if (competitor) {
@@ -122,25 +125,23 @@ export function CompetitorEditDialog({
 
   async function handleDelete() {
     if (!competitor) return;
-
+    setIsDeleting(true);
     try {
       const response = await fetch(
         `/api/tournaments/${competitor.tournamentId}/competitors/${competitor.id}`,
-        {
-          method: "DELETE",
-        }
+        { method: "DELETE" }
       );
 
-      if (!response.ok) {
-        throw new Error("Failed to delete competitor");
-      }
+      if (!response.ok) throw new Error("Failed to delete competitor");
 
       toast.success("Competidor excluído com sucesso!");
       setDeleteDialogOpen(false);
       onOpenChange(false);
       onCompetitorUpdated();
-    } catch (error) {
+    } catch {
       toast.error("Falha ao excluir competidor.");
+    } finally {
+      setIsDeleting(false);
     }
   }
 
@@ -304,11 +305,19 @@ export function CompetitorEditDialog({
                   variant="outline"
                   onClick={() => onOpenChange(false)}
                   className="flex-1"
+                  disabled={isSubmitting}
                 >
                   Cancelar
                 </Button>
-                <Button type="submit" className="flex-1">
-                  Salvar Alterações
+                <Button type="submit" className="flex-1" disabled={isSubmitting}>
+                  {isSubmitting ? (
+                    <>
+                      <Loader2 className="animate-spin" />
+                      Salvando...
+                    </>
+                  ) : (
+                    "Salvar Alterações"
+                  )}
                 </Button>
               </div>
 
@@ -318,6 +327,7 @@ export function CompetitorEditDialog({
                 variant="destructive"
                 className="w-full"
                 onClick={() => setDeleteDialogOpen(true)}
+                disabled={isSubmitting}
               >
                 <Trash2 />
                 Excluir Competidor
@@ -339,12 +349,20 @@ export function CompetitorEditDialog({
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogCancel disabled={isDeleting}>Cancelar</AlertDialogCancel>
             <AlertDialogAction
               onClick={handleDelete}
+              disabled={isDeleting}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
-              Excluir
+              {isDeleting ? (
+                <>
+                  <Loader2 className="animate-spin" />
+                  Excluindo...
+                </>
+              ) : (
+                "Excluir"
+              )}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Bracket, Competitor } from "@prisma/client";
 import { toast } from "sonner";
 import {
@@ -9,13 +9,11 @@ import {
   ListFilter,
   Zap,
   Loader2,
-  Play,
   Trash2,
   Eye,
   CheckCircle2,
   Clock,
   Flag,
-  HeartPulse,
   Activity,
 } from "lucide-react";
 import Link from "next/link";
@@ -67,6 +65,11 @@ type BracketWithCount = Bracket & {
   _count?: { matches: number };
 };
 
+type PendingDelete = {
+  bracketId: string;
+  category: string;
+  status: string;
+};
 
 const statusLabels: Record<string, string> = {
   NOT_STARTED: "Não iniciado",
@@ -89,13 +92,28 @@ export default function BracketsPage({
     tournamentId: string;
   } | null>(null);
 
-  const [kataCategories, setKataCategories] = useState<CategoryGroup[]>([]);
-  const [kumiteCategories, setKumiteCategories] = useState<CategoryGroup[]>([]);
+  const [kataBase, setKataBase] = useState<CategoryGroup[]>([]);
+  const [kumiteBase, setKumiteBase] = useState<CategoryGroup[]>([]);
   const [brackets, setBrackets] = useState<BracketWithCount[]>([]);
   const [loading, setLoading] = useState(true);
   const [generatingAll, setGeneratingAll] = useState(false);
   const [confirmGenerateAll, setConfirmGenerateAll] = useState(false);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<PendingDelete | null>(null);
+
+  // Derive categories with brackets without re-fetching competitors
+  const bracketsMap = useMemo(
+    () => new Map(brackets.map((b) => [b.category, b])),
+    [brackets]
+  );
+  const kataCategories = useMemo(
+    () => kataBase.map((cat) => ({ ...cat, bracket: bracketsMap.get(cat.category) })),
+    [kataBase, bracketsMap]
+  );
+  const kumiteCategories = useMemo(
+    () => kumiteBase.map((cat) => ({ ...cat, bracket: bracketsMap.get(cat.category) })),
+    [kumiteBase, bracketsMap]
+  );
 
   useEffect(() => {
     params.then((p) => setResolvedParams(p));
@@ -109,46 +127,38 @@ export default function BracketsPage({
   async function fetchData() {
     try {
       setLoading(true);
+      const [categoriesRes, bracketsRes] = await Promise.all([
+        fetch(`/api/tournaments/${resolvedParams!.tournamentId}/categories`),
+        fetch(`/api/tournaments/${resolvedParams!.tournamentId}/brackets`),
+      ]);
 
-      // Buscar categorias
-      const categoriesRes = await fetch(
-        `/api/tournaments/${resolvedParams!.tournamentId}/categories`
-      );
       if (!categoriesRes.ok) throw new Error("Failed to fetch categories");
-      const categoriesData = await categoriesRes.json();
-
-      // Buscar brackets
-      const bracketsRes = await fetch(
-        `/api/tournaments/${resolvedParams!.tournamentId}/brackets`
-      );
       if (!bracketsRes.ok) throw new Error("Failed to fetch brackets");
+
+      const categoriesData = await categoriesRes.json();
       const bracketsData: BracketWithCount[] = await bracketsRes.json();
 
+      setKataBase(categoriesData.kataCategories);
+      setKumiteBase(categoriesData.kumiteCategories);
       setBrackets(bracketsData);
-
-      // Mapear brackets para categorias
-      const bracketsMap = new Map(bracketsData.map((b) => [b.category, b]));
-
-      const kataWithBrackets = categoriesData.kataCategories.map(
-        (cat: CategoryGroup) => ({
-          ...cat,
-          bracket: bracketsMap.get(cat.category),
-        })
-      );
-
-      const kumiteWithBrackets = categoriesData.kumiteCategories.map(
-        (cat: CategoryGroup) => ({
-          ...cat,
-          bracket: bracketsMap.get(cat.category),
-        })
-      );
-
-      setKataCategories(kataWithBrackets);
-      setKumiteCategories(kumiteWithBrackets);
-    } catch (error) {
+    } catch {
       toast.error("Falha ao carregar dados.");
     } finally {
       setLoading(false);
+    }
+  }
+
+  /** Refresh only brackets — avoids full-page loading flash */
+  async function fetchBrackets() {
+    try {
+      const res = await fetch(
+        `/api/tournaments/${resolvedParams!.tournamentId}/brackets`
+      );
+      if (!res.ok) throw new Error();
+      const data: BracketWithCount[] = await res.json();
+      setBrackets(data);
+    } catch {
+      toast.error("Falha ao atualizar chaves.");
     }
   }
 
@@ -172,7 +182,7 @@ export default function BracketsPage({
       const data = await res.json();
       toast.success(data.message || "Chaves geradas com sucesso!");
       setConfirmGenerateAll(false);
-      fetchData();
+      await fetchBrackets();
     } catch (error: any) {
       toast.error(error.message || "Erro ao gerar chaves");
     } finally {
@@ -198,7 +208,7 @@ export default function BracketsPage({
       }
 
       toast.success("Chave gerada com sucesso!");
-      fetchData();
+      await fetchBrackets();
     } catch (error: any) {
       toast.error(error.message || "Erro ao gerar chave");
     } finally {
@@ -206,40 +216,26 @@ export default function BracketsPage({
     }
   }
 
-  async function handleDeleteBracket(bracketId: string, category: string) {
+  function handleDeleteBracket(bracketId: string, category: string) {
     const bracket = brackets.find((b) => b.id === bracketId);
     if (!bracket) return;
+    setPendingDelete({ bracketId, category, status: bracket.status });
+  }
 
-    let confirmMessage = "Tem certeza que deseja excluir esta chave?";
-
-    if (bracket.status === "IN_PROGRESS") {
-      confirmMessage =
-        "⚠️ ATENÇÃO: Esta chave está em andamento!\n\n" +
-        "Todos os resultados registrados serão PERDIDOS.\n\n" +
-        "Tem certeza que deseja continuar?";
-    } else if (bracket.status === "COMPLETED") {
-      confirmMessage =
-        "⚠️ ATENÇÃO: Esta chave já foi concluída!\n\n" +
-        "O histórico completo da competição será PERDIDO.\n\n" +
-        "Tem certeza que deseja continuar?";
-    }
-
-    if (!confirm(confirmMessage)) return;
-
+  async function confirmDeleteBracket() {
+    if (!pendingDelete) return;
+    const { bracketId, category } = pendingDelete;
+    setPendingDelete(null);
     setActionLoading(category);
     try {
       const res = await fetch(
-        `/api/tournaments/${
-          resolvedParams!.tournamentId
-        }/brackets/${bracketId}`,
+        `/api/tournaments/${resolvedParams!.tournamentId}/brackets/${bracketId}`,
         { method: "DELETE" }
       );
-
       if (!res.ok) throw new Error("Falha ao excluir chave");
-
       toast.success("Chave excluída com sucesso!");
-      fetchData();
-    } catch (error) {
+      await fetchBrackets();
+    } catch {
       toast.error("Erro ao excluir chave");
     } finally {
       setActionLoading(null);
@@ -258,20 +254,19 @@ export default function BracketsPage({
   }
 
   const totalCategories = kataCategories.length + kumiteCategories.length;
-  const totalKataCompetitors = kataCategories.reduce(
-    (sum, cat) => sum + cat.competitors.length,
-    0
-  );
-  const totalKumiteCompetitors = kumiteCategories.reduce(
-    (sum, cat) => sum + cat.competitors.length,
-    0
-  );
 
   const stats = {
     totalBrackets: brackets.length,
     inProgress: brackets.filter((b) => b.status === "IN_PROGRESS").length,
     completed: brackets.filter((b) => b.status === "COMPLETED").length,
   };
+
+  const deleteWarning =
+    pendingDelete?.status === "IN_PROGRESS"
+      ? "Esta chave está em andamento. Todos os resultados registrados serão perdidos."
+      : pendingDelete?.status === "COMPLETED"
+      ? "Esta chave já foi concluída. O histórico completo da competição será perdido."
+      : null;
 
   return (
     <div className="container mx-auto p-6">
@@ -444,10 +439,7 @@ export default function BracketsPage({
       </Tabs>
 
       {/* Confirm Generate All Dialog */}
-      <AlertDialog
-        open={confirmGenerateAll}
-        onOpenChange={setConfirmGenerateAll}
-      >
+      <AlertDialog open={confirmGenerateAll} onOpenChange={setConfirmGenerateAll}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Gerar Todas as Chaves?</AlertDialogTitle>
@@ -461,18 +453,46 @@ export default function BracketsPage({
             <AlertDialogCancel disabled={generatingAll}>
               Cancelar
             </AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleGenerateAll}
-              disabled={generatingAll}
-            >
+            <AlertDialogAction onClick={handleGenerateAll} disabled={generatingAll}>
               {generatingAll ? (
                 <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  <Loader2 className="animate-spin" />
                   Gerando...
                 </>
               ) : (
                 "Gerar"
               )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Confirm Delete Bracket Dialog */}
+      <AlertDialog
+        open={!!pendingDelete}
+        onOpenChange={(open) => { if (!open) setPendingDelete(null); }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir Chave?</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-2">
+                {deleteWarning && (
+                  <p className="font-semibold text-destructive">
+                    ⚠️ {deleteWarning}
+                  </p>
+                )}
+                <p>Esta ação não pode ser desfeita.</p>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmDeleteBracket}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Excluir
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -515,7 +535,6 @@ function CategoryCard({
                   className="flex items-center gap-1"
                 >
                   <StatusIcon />
-
                   {statusLabels[group.bracket.status]}
                 </Badge>
               )}
@@ -527,9 +546,6 @@ function CategoryCard({
           </div>
 
           <div className="flex items-center gap-2">
-            {/* Status Badge */}
-
-            {/* Botões de Ação */}
             {group.bracket ? (
               <>
                 {/* Ver Chave */}

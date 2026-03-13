@@ -2,15 +2,9 @@
 
 import { useEffect, useState, useRef } from "react";
 import { FaixaPretaLogo } from "@/components/icon/faixa-preta-logo";
-import { TimerIcon, Trophy } from "lucide-react";
+import { Trophy } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useLiveMatch } from "@/hooks/use-live-match";
-
-type Notification = {
-  type: "aka_point" | "ao_point" | "winner";
-  message: string;
-  winner?: "aka" | "ao";
-};
 
 export default function ScoreboardPage({
   params,
@@ -20,61 +14,33 @@ export default function ScoreboardPage({
   const [resolvedParams, setResolvedParams] = useState<{
     tournamentId: string;
   } | null>(null);
-  const [notification, setNotification] = useState<Notification | null>(null);
+
+  const [akaPulse, setAkaPulse] = useState(false);
+  const [aoPulse, setAoPulse] = useState(false);
+
   const prevScoresRef = useRef<{ aka: number; ao: number }>({ aka: 0, ao: 0 });
-  const prevTimerRef = useRef<number>(120);
 
   useEffect(() => {
     params.then((p) => setResolvedParams(p));
   }, [params]);
 
-  // Usar hook SSE
   const liveMatch = useLiveMatch(resolvedParams?.tournamentId || "");
 
+  // Detect score changes → pulse the correct side
   useEffect(() => {
-    if (!liveMatch) {
-      setNotification(null);
-      return;
-    }
+    if (!liveMatch) return;
 
-    // Verificar pontos
     if (liveMatch.akaScore > prevScoresRef.current.aka) {
-      showNotification({
-        type: "aka_point",
-        message: "PONTO PARA AKA!",
-      });
+      setAkaPulse(true);
+      setTimeout(() => setAkaPulse(false), 900);
     }
     if (liveMatch.aoScore > prevScoresRef.current.ao) {
-      showNotification({
-        type: "ao_point",
-        message: "PONTO PARA AO!",
-      });
-    }
-
-    // Verificar fim da luta
-    if (
-      prevTimerRef.current > 0 &&
-      liveMatch.timeRemaining === 0 &&
-      !liveMatch.timerRunning
-    ) {
-      const winner = liveMatch.akaScore > liveMatch.aoScore ? "aka" : "ao";
-      showNotification({
-        type: "winner",
-        message: winner === "aka" ? "AKA VENCEU!" : "AO VENCEU!",
-        winner,
-      });
+      setAoPulse(true);
+      setTimeout(() => setAoPulse(false), 900);
     }
 
     prevScoresRef.current = { aka: liveMatch.akaScore, ao: liveMatch.aoScore };
-    prevTimerRef.current = liveMatch.timeRemaining;
-  }, [liveMatch]);
-
-  function showNotification(notif: Notification) {
-    setNotification(notif);
-    setTimeout(() => {
-      setNotification(null);
-    }, 3000);
-  }
+  }, [liveMatch?.akaScore, liveMatch?.aoScore]);
 
   if (!liveMatch) {
     return (
@@ -87,40 +53,53 @@ export default function ScoreboardPage({
   const minutes = Math.floor(liveMatch.timeRemaining / 60);
   const seconds = liveMatch.timeRemaining % 60;
 
+  // Persistent winner — shown whenever the timer is at 0 and stopped
+  const matchOver = liveMatch.timeRemaining === 0 && !liveMatch.timerRunning;
+  const winner = matchOver
+    ? liveMatch.akaScore >= liveMatch.aoScore
+      ? "aka"
+      : "ao"
+    : null;
+
   const getMatchTypeLabel = (match: typeof liveMatch): string => {
-    // Baseado na observação: final/terceiro lugar aparecem com round 2 (como quartas)
-    // e semifinal com round 1 (como rodada 1)
-    // Isso sugere que o round cresce do fim para o começo
-    if (match && match.round === 4) return "3º LUGAR";
-    if (match && match.round === 2) return "FINAL";
-    if (match && match.round === 1) return "SEMIFINAL";
-    if (match && match.round === 3) return "QUARTAS";
-    return `RODADA ${match?.round || "?"}`;
+    if (match.round === 4) return "3º LUGAR";
+    if (match.round === 2) return "FINAL";
+    if (match.round === 1) return "SEMIFINAL";
+    if (match.round === 3) return "QUARTAS";
+    return `RODADA ${match.round || "?"}`;
   };
 
   return (
     <div className="p-4 h-screen flex flex-col items-center justify-center gap-12 bg-gradient-to-br from-background to-muted relative">
-      {/* Notificação Flutuante */}
-      {notification && (
+      {/* Winner overlay — persistent while match is over */}
+      {winner && (
         <div
           className={cn(
-            "flex items-center justify-center fixed inset-0 z-50 text-center p-12 animate-in fade-in duration-500",
-            notification.type === "aka_point" && "bg-red-500 text-white",
-            notification.type === "ao_point" && "bg-blue-500 text-white",
-            notification.type === "winner" &&
-              notification.winner === "aka" &&
-              "bg-red-600 text-whit",
-            notification.type === "winner" &&
-              notification.winner === "ao" &&
-              "bg-blue-600 text-white"
+            "fixed inset-0 z-50 flex flex-col items-center justify-center gap-8 text-white animate-in fade-in duration-700",
+            winner === "aka" ? "bg-red-600/95" : "bg-blue-600/95"
           )}
         >
-          {notification.type === "winner" && (
-            <Trophy className="mx-auto h-24 w-24 mb-4" />
-          )}
-          <h2 className="text-9xl font-bold tracking-wider animate-pulse">
-            {notification.message}
-          </h2>
+          <Trophy className="h-32 w-32 drop-shadow-lg" />
+          <div className="text-center space-y-3">
+            <p className="text-4xl font-semibold tracking-widest uppercase opacity-80">
+              Vencedor
+            </p>
+            <h2 className="text-8xl font-black tracking-wider">
+              {winner === "aka" ? liveMatch.akaName : liveMatch.aoName}
+            </h2>
+            <p className="text-3xl font-medium opacity-70">
+              {winner === "aka" ? liveMatch.akaSchool : liveMatch.aoSchool}
+            </p>
+          </div>
+          <div className="flex items-center gap-6 text-5xl font-bold font-mono">
+            <span className={winner === "aka" ? "opacity-100" : "opacity-40"}>
+              {liveMatch.akaScore}
+            </span>
+            <span className="opacity-50 text-3xl">×</span>
+            <span className={winner === "ao" ? "opacity-100" : "opacity-40"}>
+              {liveMatch.aoScore}
+            </span>
+          </div>
         </div>
       )}
 
@@ -157,7 +136,13 @@ export default function ScoreboardPage({
               </div>
             </div>
 
-            <div className="relative size-[200px] bg-red-500 text-white rounded-xl flex items-center justify-center shadow-xl">
+            {/* AKA score — pulses on point */}
+            <div
+              className={cn(
+                "relative size-[200px] bg-red-500 text-white rounded-xl flex items-center justify-center shadow-xl transition-all duration-150",
+                akaPulse && "scale-110 ring-4 ring-red-300 shadow-red-400 shadow-2xl"
+              )}
+            >
               <span className="font-bold font-mono text-9xl text-center">
                 {liveMatch.akaScore}
               </span>
@@ -172,7 +157,13 @@ export default function ScoreboardPage({
 
           {/* AO */}
           <section className="grid grid-cols-[200px_auto] gap-4 border-2 border-blue-500 p-6 rounded-2xl bg-card shadow-2xl">
-            <div className="relative size-[200px] bg-blue-500 text-white rounded-xl font-bold font-mono text-9xl text-center flex items-center justify-center shadow-xl">
+            {/* AO score — pulses on point */}
+            <div
+              className={cn(
+                "relative size-[200px] bg-blue-500 text-white rounded-xl font-bold font-mono text-9xl text-center flex items-center justify-center shadow-xl transition-all duration-150",
+                aoPulse && "scale-110 ring-4 ring-blue-300 shadow-blue-400 shadow-2xl"
+              )}
+            >
               {liveMatch.aoScore}
 
               {liveMatch.aoSenshu && (
