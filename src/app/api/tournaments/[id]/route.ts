@@ -63,11 +63,13 @@ export async function PUT(
 
     const body = await req.json();
 
+    if (!body.name) {
+      return NextResponse.json(tournament);
+    }
+
     const updatedTournament = await prisma.tournament.update({
       where: { id: tournamentId },
-      data: {
-        name: body.name || tournament.name,
-      },
+      data: { name: body.name },
     });
 
     return NextResponse.json(updatedTournament);

@@ -15,6 +15,8 @@ export async function GET(req: NextRequest) {
 
   const stream = new ReadableStream({
     async start(controller) {
+      let lastData: string | null = null;
+
       // Polling interval
       const intervalId = setInterval(async () => {
         try {
@@ -26,7 +28,11 @@ export async function GET(req: NextRequest) {
             ? `data: ${JSON.stringify(liveMatch)}\n\n`
             : `data: null\n\n`;
 
-          controller.enqueue(encoder.encode(data));
+          // Only emit when data actually changed
+          if (data !== lastData) {
+            lastData = data;
+            controller.enqueue(encoder.encode(data));
+          }
         } catch (error) {
           console.error("SSE Error:", error);
         }

@@ -19,6 +19,7 @@ import {
   Activity,
 } from "lucide-react";
 import Link from "next/link";
+import { beltLabels, genderLabels } from "@/lib/constants/labels";
 
 import {
   Card,
@@ -66,22 +67,6 @@ type BracketWithCount = Bracket & {
   _count?: { matches: number };
 };
 
-const beltLabels: Record<string, string> = {
-  WHITE: "Branca",
-  BLUE: "Azul",
-  YELLOW: "Amarela",
-  RED: "Vermelha",
-  ORANGE: "Laranja",
-  GREEN: "Verde",
-  PURPLE: "Roxa",
-  BROWN: "Marrom",
-  BLACK: "Preta",
-};
-
-const genderLabels: Record<string, string> = {
-  MALE: "Masculino",
-  FEMALE: "Feminino",
-};
 
 const statusLabels: Record<string, string> = {
   NOT_STARTED: "Não iniciado",

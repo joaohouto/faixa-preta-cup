@@ -3,7 +3,7 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Belt, Competitor, Gender } from "@prisma/client";
 import { useForm } from "react-hook-form";
-import { z } from "zod";
+import type { Resolver } from "react-hook-form";
 import { useEffect, useState } from "react";
 import { Trash2 } from "lucide-react";
 
@@ -42,19 +42,11 @@ import {
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
-
-const competitorSchema = z.object({
-  name: z.string().min(1, "Nome é obrigatório"),
-  gender: z.nativeEnum(Gender),
-  weight: z.coerce.number().optional(),
-  birthdate: z.string().min(1, "Data de nascimento é obrigatória"),
-  belt: z.nativeEnum(Belt),
-  school: z.string().min(1, "Escola é obrigatória"),
-  kata: z.boolean().default(false),
-  kumite: z.boolean().default(false),
-});
-
-type CompetitorFormValues = z.infer<typeof competitorSchema>;
+import { beltLabels, genderLabels } from "@/lib/constants/labels";
+import {
+  competitorSchema,
+  type CompetitorFormValues,
+} from "@/lib/schemas/competitor";
 
 interface CompetitorEditDialogProps {
   competitor: Competitor | null;
@@ -63,22 +55,6 @@ interface CompetitorEditDialogProps {
   onCompetitorUpdated: () => void;
 }
 
-const beltLabels: Record<Belt, string> = {
-  WHITE: "Branca",
-  BLUE: "Azul",
-  YELLOW: "Amarela",
-  RED: "Vermelha",
-  ORANGE: "Laranja",
-  GREEN: "Verde",
-  PURPLE: "Roxa",
-  BROWN: "Marrom",
-  BLACK: "Preta",
-};
-
-const genderLabels: Record<Gender, string> = {
-  MALE: "Masculino",
-  FEMALE: "Feminino",
-};
 
 export function CompetitorEditDialog({
   competitor,
@@ -88,8 +64,8 @@ export function CompetitorEditDialog({
 }: CompetitorEditDialogProps) {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 
-  const form = useForm({
-    resolver: zodResolver(competitorSchema),
+  const form = useForm<CompetitorFormValues>({
+    resolver: zodResolver(competitorSchema) as Resolver<CompetitorFormValues>,
     defaultValues: {
       name: "",
       gender: Gender.MALE,
@@ -226,7 +202,7 @@ export function CompetitorEditDialog({
                   <FormItem>
                     <FormLabel>Peso (kg)</FormLabel>
                     <FormControl>
-                      <Input type="number" step="0.1" {...(field as any)} />
+                      <Input type="number" step="0.1" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>

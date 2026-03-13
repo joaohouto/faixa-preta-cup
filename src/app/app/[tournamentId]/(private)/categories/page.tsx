@@ -22,6 +22,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { beltLabels, genderLabels } from "@/lib/constants/labels";
 import {
   Empty,
   EmptyDescription,
@@ -35,22 +36,6 @@ interface CategoryGroup {
   competitors: Competitor[];
 }
 
-const beltLabels: Record<string, string> = {
-  WHITE: "Branca",
-  BLUE: "Azul",
-  YELLOW: "Amarela",
-  RED: "Vermelha",
-  ORANGE: "Laranja",
-  GREEN: "Verde",
-  PURPLE: "Roxa",
-  BROWN: "Marrom",
-  BLACK: "Preta",
-};
-
-const genderLabels: Record<string, string> = {
-  MALE: "Masculino",
-  FEMALE: "Feminino",
-};
 
 export default function CategoriesPage({
   params,

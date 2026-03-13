@@ -1,6 +1,9 @@
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/prisma";
+import { Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
+
+type MatchWithBracket = Prisma.MatchGetPayload<{ include: { bracket: true } }>;
 
 export async function PUT(
   req: Request,
@@ -76,7 +79,7 @@ export async function PUT(
   }
 }
 
-async function propagateWinner(match: any, winnerId: string) {
+async function propagateWinner(match: MatchWithBracket, winnerId: string) {
   const { round, position, bracketId, bracket, akaId, aoId } = match;
 
   // Determinar perdedor

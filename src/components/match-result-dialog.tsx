@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import type { Resolver } from "react-hook-form";
@@ -94,7 +94,7 @@ export function MatchResultDialog({
   });
 
   // Resetar form quando match mudar
-  useState(() => {
+  useEffect(() => {
     if (match) {
       form.reset({
         akaScore: match.akaScore ?? 0,
@@ -103,7 +103,7 @@ export function MatchResultDialog({
         decisionByHantei: match.decisionByHantei || false,
       });
     }
-  });
+  }, [match]);
 
   async function onSubmit(values: ResultFormValues) {
     if (!match) return;

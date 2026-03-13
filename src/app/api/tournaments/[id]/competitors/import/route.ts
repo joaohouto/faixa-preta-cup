@@ -3,12 +3,12 @@ import { db } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 import Papa from "papaparse";
 import { z } from "zod";
-import { Belt, Gender } from "@prisma/client";
 import {
   calculateAge,
   getKataCategory,
   getKumiteCategory,
 } from "@/lib/utils/classification";
+import { beltMapping, genderMapping } from "@/lib/constants/labels";
 
 const competitorSchema = z.object({
   nome: z.string().min(1),
@@ -20,23 +20,6 @@ const competitorSchema = z.object({
   kumite: z.string().min(1),
   kata: z.string().min(1),
 });
-
-const beltMapping: Record<string, Belt> = {
-  branca: Belt.WHITE,
-  azul: Belt.BLUE,
-  amarela: Belt.YELLOW,
-  vermelha: Belt.RED,
-  laranja: Belt.ORANGE,
-  verde: Belt.GREEN,
-  roxa: Belt.PURPLE,
-  marrom: Belt.BROWN,
-  preta: Belt.BLACK,
-};
-
-const genderMapping: Record<string, Gender> = {
-  masculino: Gender.MALE,
-  feminino: Gender.FEMALE,
-};
 
 export async function POST(
   req: Request,

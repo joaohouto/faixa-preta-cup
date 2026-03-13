@@ -8,13 +8,7 @@ export function CommandPalette() {
 
   useHotkeys(
     "ctrl+shift+l",
-    () => {
-      if (theme === "light") {
-        setTheme("dark");
-      } else {
-        setTheme("light");
-      }
-    },
+    () => setTheme(theme === "light" ? "dark" : "light"),
     {
       preventDefault: true,
       enableOnFormTags: true,

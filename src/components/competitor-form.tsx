@@ -3,8 +3,13 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Belt, Gender } from "@prisma/client";
 import { useForm } from "react-hook-form";
-import { z } from "zod";
+import type { Resolver } from "react-hook-form";
 
+import { beltLabels, genderLabels } from "@/lib/constants/labels";
+import {
+  competitorSchema,
+  type CompetitorFormValues,
+} from "@/lib/schemas/competitor";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -32,35 +37,6 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
 
-const competitorSchema = z.object({
-  name: z.string().min(1, "Name is required"),
-  gender: z.nativeEnum(Gender),
-  weight: z.coerce.number().optional(),
-  birthdate: z.string().min(1, "Birthdate is required"),
-  belt: z.nativeEnum(Belt),
-  school: z.string().min(1, "School is required"),
-  kata: z.boolean().default(false),
-  kumite: z.boolean().default(false),
-});
-
-const beltLabels: Record<Belt, string> = {
-  WHITE: "Branca",
-  BLUE: "Azul",
-  YELLOW: "Amarela",
-  RED: "Vermelha",
-  ORANGE: "Laranja",
-  GREEN: "Verde",
-  PURPLE: "Roxa",
-  BROWN: "Marrom",
-  BLACK: "Preta",
-};
-
-const genderLabels: Record<Gender, string> = {
-  MALE: "Masculino",
-  FEMALE: "Feminino",
-};
-
-type CompetitorFormValues = z.infer<typeof competitorSchema>;
 
 interface CompetitorFormProps {
   tournamentId: string;
@@ -71,8 +47,8 @@ export function CompetitorForm({
   tournamentId,
   onCompetitorCreated,
 }: CompetitorFormProps) {
-  const form = useForm({
-    resolver: zodResolver(competitorSchema),
+  const form = useForm<CompetitorFormValues>({
+    resolver: zodResolver(competitorSchema) as Resolver<CompetitorFormValues>,
     defaultValues: {
       name: "",
       gender: Gender.MALE,
@@ -127,7 +103,7 @@ export function CompetitorForm({
                 <FormItem>
                   <FormLabel>Nome</FormLabel>
                   <FormControl>
-                    <Input placeholder="e.g., John Doe" {...(field as any)} />
+                    <Input placeholder="e.g., John Doe" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -167,7 +143,7 @@ export function CompetitorForm({
                 <FormItem>
                   <FormLabel>Peso (kg)</FormLabel>
                   <FormControl>
-                    <Input type="number" {...(field as any)} />
+                    <Input type="number" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -180,7 +156,7 @@ export function CompetitorForm({
                 <FormItem>
                   <FormLabel>Data de Nascimento</FormLabel>
                   <FormControl>
-                    <Input type="date" {...(field as any)} />
+                    <Input type="date" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -222,7 +198,7 @@ export function CompetitorForm({
                   <FormControl>
                     <Input
                       placeholder="e.g., Shotokan Karate"
-                      {...(field as any)}
+                      {...field}
                     />
                   </FormControl>
                   <FormMessage />
