@@ -2,15 +2,11 @@
 
 import { useEffect, useState, useRef } from "react";
 import { FaixaPretaLogo } from "@/components/icon/faixa-preta-logo";
-import { TimerIcon, Trophy } from "lucide-react";
+import { Trophy } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useLiveMatch } from "@/hooks/use-live-match";
 
-type Notification = {
-  type: "aka_point" | "ao_point" | "winner";
-  message: string;
-  winner?: "aka" | "ao";
-};
+type PointSide = "aka" | "ao" | null;
 
 export default function ScoreboardPage({
   params,
@@ -20,61 +16,59 @@ export default function ScoreboardPage({
   const [resolvedParams, setResolvedParams] = useState<{
     tournamentId: string;
   } | null>(null);
-  const [notification, setNotification] = useState<Notification | null>(null);
+
+  // Which side just scored — drives the pulse animation
+  const [pulseSide, setPulseSide] = useState<PointSide>(null);
+  // Winner overlay
+  const [winner, setWinner] = useState<{
+    side: "aka" | "ao";
+    name: string;
+  } | null>(null);
+
   const prevScoresRef = useRef<{ aka: number; ao: number }>({ aka: 0, ao: 0 });
   const prevTimerRef = useRef<number>(120);
+  const pulseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     params.then((p) => setResolvedParams(p));
   }, [params]);
 
-  // Usar hook SSE
   const liveMatch = useLiveMatch(resolvedParams?.tournamentId || "");
 
   useEffect(() => {
     if (!liveMatch) {
-      setNotification(null);
+      setPulseSide(null);
+      setWinner(null);
       return;
     }
 
-    // Verificar pontos
-    if (liveMatch.akaScore > prevScoresRef.current.aka) {
-      showNotification({
-        type: "aka_point",
-        message: "PONTO PARA AKA!",
-      });
-    }
-    if (liveMatch.aoScore > prevScoresRef.current.ao) {
-      showNotification({
-        type: "ao_point",
-        message: "PONTO PARA AO!",
-      });
+    const akaScored = liveMatch.akaScore > prevScoresRef.current.aka;
+    const aoScored = liveMatch.aoScore > prevScoresRef.current.ao;
+
+    if (akaScored || aoScored) {
+      const side = akaScored ? "aka" : "ao";
+      if (pulseTimerRef.current) clearTimeout(pulseTimerRef.current);
+      setPulseSide(side);
+      pulseTimerRef.current = setTimeout(() => setPulseSide(null), 1500);
     }
 
-    // Verificar fim da luta
+    // Detect match end (timer hit 0)
     if (
       prevTimerRef.current > 0 &&
       liveMatch.timeRemaining === 0 &&
       !liveMatch.timerRunning
     ) {
-      const winner = liveMatch.akaScore > liveMatch.aoScore ? "aka" : "ao";
-      showNotification({
-        type: "winner",
-        message: winner === "aka" ? "AKA VENCEU!" : "AO VENCEU!",
-        winner,
-      });
+      const winningSide =
+        liveMatch.akaScore >= liveMatch.aoScore ? "aka" : "ao";
+      const winnerName =
+        winningSide === "aka" ? liveMatch.akaName : liveMatch.aoName;
+      setWinner({ side: winningSide, name: winnerName });
+      setTimeout(() => setWinner(null), 6000);
     }
 
     prevScoresRef.current = { aka: liveMatch.akaScore, ao: liveMatch.aoScore };
     prevTimerRef.current = liveMatch.timeRemaining;
   }, [liveMatch]);
-
-  function showNotification(notif: Notification) {
-    setNotification(notif);
-    setTimeout(() => {
-      setNotification(null);
-    }, 3000);
-  }
 
   if (!liveMatch) {
     return (
@@ -88,9 +82,6 @@ export default function ScoreboardPage({
   const seconds = liveMatch.timeRemaining % 60;
 
   const getMatchTypeLabel = (match: typeof liveMatch): string => {
-    // Baseado na observação: final/terceiro lugar aparecem com round 2 (como quartas)
-    // e semifinal com round 1 (como rodada 1)
-    // Isso sugere que o round cresce do fim para o começo
     if (match && match.round === 4) return "3º LUGAR";
     if (match && match.round === 2) return "FINAL";
     if (match && match.round === 1) return "SEMIFINAL";
@@ -99,28 +90,22 @@ export default function ScoreboardPage({
   };
 
   return (
-    <div className="p-4 h-screen flex flex-col items-center justify-center gap-12 bg-gradient-to-br from-background to-muted relative">
-      {/* Notificação Flutuante */}
-      {notification && (
+    <div className="p-4 h-screen flex flex-col items-center justify-center gap-12 bg-gradient-to-br from-background to-muted relative overflow-hidden">
+      {/* Winner overlay */}
+      {winner && (
         <div
           className={cn(
-            "flex items-center justify-center fixed inset-0 z-50 text-center p-12 animate-in fade-in duration-500",
-            notification.type === "aka_point" && "bg-red-500 text-white",
-            notification.type === "ao_point" && "bg-blue-500 text-white",
-            notification.type === "winner" &&
-              notification.winner === "aka" &&
-              "bg-red-600 text-whit",
-            notification.type === "winner" &&
-              notification.winner === "ao" &&
-              "bg-blue-600 text-white"
+            "flex flex-col items-center justify-center fixed inset-0 z-50 text-center p-12 animate-in fade-in duration-500",
+            winner.side === "aka" ? "bg-red-600" : "bg-blue-600"
           )}
         >
-          {notification.type === "winner" && (
-            <Trophy className="mx-auto h-24 w-24 mb-4" />
-          )}
-          <h2 className="text-9xl font-bold tracking-wider animate-pulse">
-            {notification.message}
+          <Trophy className="h-28 w-28 text-yellow-300 mb-6 drop-shadow-lg animate-bounce" />
+          <h2 className="text-white text-5xl font-bold tracking-wide mb-3 uppercase">
+            {winner.name}
           </h2>
+          <p className="text-white/80 text-2xl font-semibold tracking-widest uppercase">
+            Vencedor!
+          </p>
         </div>
       )}
 
@@ -129,7 +114,12 @@ export default function ScoreboardPage({
 
         <div className="grid grid-cols-2 gap-8 w-full max-w-6xl">
           {/* AKA */}
-          <section className="grid grid-cols-[auto_200px] gap-4 border-2 border-red-500 p-6 rounded-2xl bg-card shadow-2xl">
+          <section
+            className={cn(
+              "grid grid-cols-[auto_200px] gap-4 border-2 border-red-500 p-6 rounded-2xl bg-card shadow-2xl transition-all duration-300",
+              pulseSide === "aka" && "ring-4 ring-red-400 ring-offset-2"
+            )}
+          >
             <div className="flex flex-col justify-between">
               <div>
                 <strong className="text-xl leading-tight text-balance">
@@ -147,7 +137,7 @@ export default function ScoreboardPage({
                     key={level}
                     className={`text-center p-2 px-6 rounded-lg font-bold transition-all ${
                       liveMatch.akaChui >= level
-                        ? "bg-yellow-400 text-black"
+                        ? "bg-yellow-400 text-black scale-110"
                         : "bg-muted text-muted-foreground"
                     }`}
                   >
@@ -157,7 +147,12 @@ export default function ScoreboardPage({
               </div>
             </div>
 
-            <div className="relative size-[200px] bg-red-500 text-white rounded-xl flex items-center justify-center shadow-xl">
+            <div
+              className={cn(
+                "relative size-[200px] bg-red-500 text-white rounded-xl flex items-center justify-center shadow-xl transition-all duration-300",
+                pulseSide === "aka" && "animate-pulse scale-110"
+              )}
+            >
               <span className="font-bold font-mono text-9xl text-center">
                 {liveMatch.akaScore}
               </span>
@@ -171,8 +166,18 @@ export default function ScoreboardPage({
           </section>
 
           {/* AO */}
-          <section className="grid grid-cols-[200px_auto] gap-4 border-2 border-blue-500 p-6 rounded-2xl bg-card shadow-2xl">
-            <div className="relative size-[200px] bg-blue-500 text-white rounded-xl font-bold font-mono text-9xl text-center flex items-center justify-center shadow-xl">
+          <section
+            className={cn(
+              "grid grid-cols-[200px_auto] gap-4 border-2 border-blue-500 p-6 rounded-2xl bg-card shadow-2xl transition-all duration-300",
+              pulseSide === "ao" && "ring-4 ring-blue-400 ring-offset-2"
+            )}
+          >
+            <div
+              className={cn(
+                "relative size-[200px] bg-blue-500 text-white rounded-xl font-bold font-mono text-9xl text-center flex items-center justify-center shadow-xl transition-all duration-300",
+                pulseSide === "ao" && "animate-pulse scale-110"
+              )}
+            >
               {liveMatch.aoScore}
 
               {liveMatch.aoSenshu && (

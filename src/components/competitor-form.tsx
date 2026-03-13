@@ -1,9 +1,11 @@
 "use client";
 
+import { useState } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Belt, Gender } from "@prisma/client";
 import { useForm } from "react-hook-form";
 import type { Resolver } from "react-hook-form";
+import { Loader2 } from "lucide-react";
 
 import { beltLabels, genderLabels } from "@/lib/constants/labels";
 import {
@@ -37,7 +39,6 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
 
-
 interface CompetitorFormProps {
   tournamentId: string;
   onCompetitorCreated: () => void;
@@ -47,6 +48,9 @@ export function CompetitorForm({
   tournamentId,
   onCompetitorCreated,
 }: CompetitorFormProps) {
+  const [open, setOpen] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
   const form = useForm<CompetitorFormValues>({
     resolver: zodResolver(competitorSchema) as Resolver<CompetitorFormValues>,
     defaultValues: {
@@ -62,6 +66,7 @@ export function CompetitorForm({
   });
 
   async function onSubmit(values: CompetitorFormValues) {
+    setIsSubmitting(true);
     try {
       const response = await fetch(
         `/api/tournaments/${tournamentId}/competitors`,
@@ -75,18 +80,22 @@ export function CompetitorForm({
       );
 
       if (!response.ok) {
-        throw new Error("Failed to create competitor");
+        throw new Error("Falha ao registrar competidor");
       }
 
-      toast.success("Competitor created successfully!");
-      onCompetitorCreated(); // Refresh list
+      toast.success("Competidor registrado com sucesso!");
+      form.reset();
+      setOpen(false);
+      onCompetitorCreated();
     } catch (error) {
-      toast.error("Failed to create competitor.");
+      toast.error("Falha ao registrar competidor.");
+    } finally {
+      setIsSubmitting(false);
     }
   }
 
   return (
-    <Dialog>
+    <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
         <Button>Registrar Competidor</Button>
       </DialogTrigger>
@@ -103,7 +112,7 @@ export function CompetitorForm({
                 <FormItem>
                   <FormLabel>Nome</FormLabel>
                   <FormControl>
-                    <Input placeholder="e.g., John Doe" {...field} />
+                    <Input placeholder="Ex: João Silva" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -178,9 +187,9 @@ export function CompetitorForm({
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      {Object.values(Belt).map((b) => (
-                        <SelectItem key={b} value={b}>
-                          {b}
+                      {Object.entries(beltLabels).map(([value, label]) => (
+                        <SelectItem key={value} value={value}>
+                          {label}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -197,7 +206,7 @@ export function CompetitorForm({
                   <FormLabel>Escola/Associação</FormLabel>
                   <FormControl>
                     <Input
-                      placeholder="e.g., Shotokan Karate"
+                      placeholder="Ex: Shotokan Karate"
                       {...field}
                     />
                   </FormControl>
@@ -210,7 +219,7 @@ export function CompetitorForm({
                 control={form.control}
                 name="kata"
                 render={({ field }) => (
-                  <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm">
+                  <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm flex-1">
                     <FormLabel>Kata</FormLabel>
                     <FormControl>
                       <Switch
@@ -225,7 +234,7 @@ export function CompetitorForm({
                 control={form.control}
                 name="kumite"
                 render={({ field }) => (
-                  <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm">
+                  <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm flex-1">
                     <FormLabel>Kumite</FormLabel>
                     <FormControl>
                       <Switch
@@ -237,7 +246,27 @@ export function CompetitorForm({
                 )}
               />
             </div>
-            <Button type="submit">Registrar</Button>
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                className="flex-1"
+                onClick={() => setOpen(false)}
+                disabled={isSubmitting}
+              >
+                Cancelar
+              </Button>
+              <Button type="submit" className="flex-1" disabled={isSubmitting}>
+                {isSubmitting ? (
+                  <>
+                    <Loader2 className="animate-spin" />
+                    Registrando...
+                  </>
+                ) : (
+                  "Registrar"
+                )}
+              </Button>
+            </div>
           </form>
         </Form>
       </DialogContent>

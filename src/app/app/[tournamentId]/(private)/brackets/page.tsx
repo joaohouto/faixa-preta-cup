@@ -17,6 +17,7 @@ import {
   Flag,
   HeartPulse,
   Activity,
+  AlertTriangle,
 } from "lucide-react";
 import Link from "next/link";
 import { beltLabels, genderLabels } from "@/lib/constants/labels";
@@ -67,7 +68,6 @@ type BracketWithCount = Bracket & {
   _count?: { matches: number };
 };
 
-
 const statusLabels: Record<string, string> = {
   NOT_STARTED: "Não iniciado",
   IN_PROGRESS: "Em andamento",
@@ -78,6 +78,12 @@ const statusIcons = {
   NOT_STARTED: Clock,
   IN_PROGRESS: Activity,
   COMPLETED: CheckCircle2,
+};
+
+type DeleteTarget = {
+  bracketId: string;
+  category: string;
+  status: string;
 };
 
 export default function BracketsPage({
@@ -96,6 +102,7 @@ export default function BracketsPage({
   const [generatingAll, setGeneratingAll] = useState(false);
   const [confirmGenerateAll, setConfirmGenerateAll] = useState(false);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null);
 
   useEffect(() => {
     params.then((p) => setResolvedParams(p));
@@ -110,14 +117,27 @@ export default function BracketsPage({
     try {
       setLoading(true);
 
-      // Buscar categorias
-      const categoriesRes = await fetch(
-        `/api/tournaments/${resolvedParams!.tournamentId}/categories`
-      );
-      if (!categoriesRes.ok) throw new Error("Failed to fetch categories");
-      const categoriesData = await categoriesRes.json();
+      const [categoriesRes, bracketsRes] = await Promise.all([
+        fetch(`/api/tournaments/${resolvedParams!.tournamentId}/categories`),
+        fetch(`/api/tournaments/${resolvedParams!.tournamentId}/brackets`),
+      ]);
 
-      // Buscar brackets
+      if (!categoriesRes.ok) throw new Error("Failed to fetch categories");
+      if (!bracketsRes.ok) throw new Error("Failed to fetch brackets");
+
+      const categoriesData = await categoriesRes.json();
+      const bracketsData: BracketWithCount[] = await bracketsRes.json();
+
+      applyBracketsToCategories(categoriesData, bracketsData);
+    } catch (error) {
+      toast.error("Falha ao carregar dados.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function refreshBrackets() {
+    try {
       const bracketsRes = await fetch(
         `/api/tournaments/${resolvedParams!.tournamentId}/brackets`
       );
@@ -125,31 +145,39 @@ export default function BracketsPage({
       const bracketsData: BracketWithCount[] = await bracketsRes.json();
 
       setBrackets(bracketsData);
+      const bracketsMap = new Map(bracketsData.map((b: BracketWithCount) => [b.category, b]));
 
-      // Mapear brackets para categorias
-      const bracketsMap = new Map(bracketsData.map((b) => [b.category, b]));
-
-      const kataWithBrackets = categoriesData.kataCategories.map(
-        (cat: CategoryGroup) => ({
-          ...cat,
-          bracket: bracketsMap.get(cat.category),
-        })
+      setKataCategories((prev: CategoryGroup[]) =>
+        prev.map((cat: CategoryGroup) => ({ ...cat, bracket: bracketsMap.get(cat.category) }))
       );
-
-      const kumiteWithBrackets = categoriesData.kumiteCategories.map(
-        (cat: CategoryGroup) => ({
-          ...cat,
-          bracket: bracketsMap.get(cat.category),
-        })
+      setKumiteCategories((prev: CategoryGroup[]) =>
+        prev.map((cat: CategoryGroup) => ({ ...cat, bracket: bracketsMap.get(cat.category) }))
       );
-
-      setKataCategories(kataWithBrackets);
-      setKumiteCategories(kumiteWithBrackets);
     } catch (error) {
-      toast.error("Falha ao carregar dados.");
-    } finally {
-      setLoading(false);
+      toast.error("Falha ao atualizar chaves.");
     }
+  }
+
+  function applyBracketsToCategories(
+    categoriesData: { kataCategories: CategoryGroup[]; kumiteCategories: CategoryGroup[] },
+    bracketsData: BracketWithCount[]
+  ) {
+    setBrackets(bracketsData);
+    const bracketsMap = new Map(bracketsData.map((b: BracketWithCount) => [b.category, b]));
+
+    setKataCategories(
+      categoriesData.kataCategories.map((cat: CategoryGroup) => ({
+        ...cat,
+        bracket: bracketsMap.get(cat.category),
+      }))
+    );
+
+    setKumiteCategories(
+      categoriesData.kumiteCategories.map((cat: CategoryGroup) => ({
+        ...cat,
+        bracket: bracketsMap.get(cat.category),
+      }))
+    );
   }
 
   async function handleGenerateAll() {
@@ -172,7 +200,7 @@ export default function BracketsPage({
       const data = await res.json();
       toast.success(data.message || "Chaves geradas com sucesso!");
       setConfirmGenerateAll(false);
-      fetchData();
+      await refreshBrackets();
     } catch (error: any) {
       toast.error(error.message || "Erro ao gerar chaves");
     } finally {
@@ -198,7 +226,7 @@ export default function BracketsPage({
       }
 
       toast.success("Chave gerada com sucesso!");
-      fetchData();
+      await refreshBrackets();
     } catch (error: any) {
       toast.error(error.message || "Erro ao gerar chave");
     } finally {
@@ -206,39 +234,41 @@ export default function BracketsPage({
     }
   }
 
-  async function handleDeleteBracket(bracketId: string, category: string) {
-    const bracket = brackets.find((b) => b.id === bracketId);
+  function handleDeleteBracketRequest(bracketId: string, category: string) {
+    const bracket = brackets.find((b: BracketWithCount) => b.id === bracketId);
     if (!bracket) return;
+    setDeleteTarget({ bracketId, category, status: bracket.status });
+  }
 
-    let confirmMessage = "Tem certeza que deseja excluir esta chave?";
+  async function handleDeleteBracketConfirm() {
+    if (!deleteTarget) return;
 
-    if (bracket.status === "IN_PROGRESS") {
-      confirmMessage =
-        "⚠️ ATENÇÃO: Esta chave está em andamento!\n\n" +
-        "Todos os resultados registrados serão PERDIDOS.\n\n" +
-        "Tem certeza que deseja continuar?";
-    } else if (bracket.status === "COMPLETED") {
-      confirmMessage =
-        "⚠️ ATENÇÃO: Esta chave já foi concluída!\n\n" +
-        "O histórico completo da competição será PERDIDO.\n\n" +
-        "Tem certeza que deseja continuar?";
-    }
-
-    if (!confirm(confirmMessage)) return;
-
+    const { bracketId, category } = deleteTarget;
     setActionLoading(category);
+    setDeleteTarget(null);
+
     try {
       const res = await fetch(
-        `/api/tournaments/${
-          resolvedParams!.tournamentId
-        }/brackets/${bracketId}`,
+        `/api/tournaments/${resolvedParams!.tournamentId}/brackets/${bracketId}`,
         { method: "DELETE" }
       );
 
       if (!res.ok) throw new Error("Falha ao excluir chave");
 
       toast.success("Chave excluída com sucesso!");
-      fetchData();
+
+      // Update state directly without full reload
+      setBrackets((prev: BracketWithCount[]) => prev.filter((b: BracketWithCount) => b.id !== bracketId));
+      setKataCategories((prev: CategoryGroup[]) =>
+        prev.map((cat: CategoryGroup) =>
+          cat.bracket?.id === bracketId ? { ...cat, bracket: undefined } : cat
+        )
+      );
+      setKumiteCategories((prev: CategoryGroup[]) =>
+        prev.map((cat: CategoryGroup) =>
+          cat.bracket?.id === bracketId ? { ...cat, bracket: undefined } : cat
+        )
+      );
     } catch (error) {
       toast.error("Erro ao excluir chave");
     } finally {
@@ -258,19 +288,11 @@ export default function BracketsPage({
   }
 
   const totalCategories = kataCategories.length + kumiteCategories.length;
-  const totalKataCompetitors = kataCategories.reduce(
-    (sum, cat) => sum + cat.competitors.length,
-    0
-  );
-  const totalKumiteCompetitors = kumiteCategories.reduce(
-    (sum, cat) => sum + cat.competitors.length,
-    0
-  );
 
   const stats = {
     totalBrackets: brackets.length,
-    inProgress: brackets.filter((b) => b.status === "IN_PROGRESS").length,
-    completed: brackets.filter((b) => b.status === "COMPLETED").length,
+    inProgress: brackets.filter((b: BracketWithCount) => b.status === "IN_PROGRESS").length,
+    completed: brackets.filter((b: BracketWithCount) => b.status === "COMPLETED").length,
   };
 
   return (
@@ -398,7 +420,7 @@ export default function BracketsPage({
                   group={group}
                   modality="KATA"
                   onGenerateBracket={handleGenerateSingle}
-                  onDeleteBracket={handleDeleteBracket}
+                  onDeleteBracket={handleDeleteBracketRequest}
                   isLoading={actionLoading === group.category}
                   tournamentId={resolvedParams!.tournamentId}
                 />
@@ -433,7 +455,7 @@ export default function BracketsPage({
                   group={group}
                   modality="KUMITE"
                   onGenerateBracket={handleGenerateSingle}
-                  onDeleteBracket={handleDeleteBracket}
+                  onDeleteBracket={handleDeleteBracketRequest}
                   isLoading={actionLoading === group.category}
                   tournamentId={resolvedParams!.tournamentId}
                 />
@@ -477,6 +499,56 @@ export default function BracketsPage({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Confirm Delete Bracket Dialog */}
+      <AlertDialog
+        open={!!deleteTarget}
+        onOpenChange={(open) => !open && setDeleteTarget(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              {deleteTarget?.status !== "NOT_STARTED" && (
+                <AlertTriangle className="h-5 w-5 text-destructive" />
+              )}
+              Excluir Chave?
+            </AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-2">
+                {deleteTarget?.status === "IN_PROGRESS" && (
+                  <div className="rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-destructive text-sm font-medium">
+                    ⚠️ Esta chave está em andamento! Todos os resultados
+                    registrados serão perdidos.
+                  </div>
+                )}
+                {deleteTarget?.status === "COMPLETED" && (
+                  <div className="rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-destructive text-sm font-medium">
+                    ⚠️ Esta chave já foi concluída! O histórico completo da
+                    competição será perdido.
+                  </div>
+                )}
+                <p>
+                  Tem certeza que deseja excluir a chave{" "}
+                  <strong className="font-mono text-xs">
+                    {deleteTarget?.category}
+                  </strong>
+                  ? Esta ação não pode ser desfeita.
+                </p>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteBracketConfirm}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              <Trash2 className="h-4 w-4" />
+              Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
@@ -515,7 +587,6 @@ function CategoryCard({
                   className="flex items-center gap-1"
                 >
                   <StatusIcon />
-
                   {statusLabels[group.bracket.status]}
                 </Badge>
               )}
@@ -527,9 +598,6 @@ function CategoryCard({
           </div>
 
           <div className="flex items-center gap-2">
-            {/* Status Badge */}
-
-            {/* Botões de Ação */}
             {group.bracket ? (
               <>
                 {/* Ver Chave */}
