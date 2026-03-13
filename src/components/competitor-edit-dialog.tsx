@@ -1,8 +1,9 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Competitor } from "@prisma/client";
+import { Belt, Competitor, Gender } from "@prisma/client";
 import { useForm } from "react-hook-form";
+import type { Resolver } from "react-hook-form";
 import { useEffect, useState } from "react";
 import { Trash2 } from "lucide-react";
 
@@ -64,7 +65,7 @@ export function CompetitorEditDialog({
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 
   const form = useForm<CompetitorFormValues>({
-    resolver: zodResolver(competitorSchema),
+    resolver: zodResolver(competitorSchema) as Resolver<CompetitorFormValues>,
     defaultValues: {
       name: "",
       gender: Gender.MALE,

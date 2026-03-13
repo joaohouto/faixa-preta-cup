@@ -1,8 +1,9 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Belt } from "@prisma/client";
+import { Belt, Gender } from "@prisma/client";
 import { useForm } from "react-hook-form";
+import type { Resolver } from "react-hook-form";
 
 import { beltLabels, genderLabels } from "@/lib/constants/labels";
 import {
@@ -47,7 +48,7 @@ export function CompetitorForm({
   onCompetitorCreated,
 }: CompetitorFormProps) {
   const form = useForm<CompetitorFormValues>({
-    resolver: zodResolver(competitorSchema),
+    resolver: zodResolver(competitorSchema) as Resolver<CompetitorFormValues>,
     defaultValues: {
       name: "",
       gender: Gender.MALE,
