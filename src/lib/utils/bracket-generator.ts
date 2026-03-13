@@ -150,26 +150,28 @@ export async function propagateByeWinners(bracketId: string) {
 
   if (!bracket) return;
 
-  // Processar byes da primeira rodada
+  // Processar byes da primeira rodada em paralelo
   const firstRoundMatches = bracket.matches.filter((m) => m.round === 1);
 
-  for (const match of firstRoundMatches) {
-    if (match.isBye && match.winnerId) {
-      const nextRound = match.round + 1;
-      const nextPosition = Math.floor(match.position / 2);
-      const isAka = match.position % 2 === 0;
+  await Promise.all(
+    firstRoundMatches
+      .filter((match) => match.isBye && match.winnerId)
+      .map((match) => {
+        const nextRound = match.round + 1;
+        const nextPosition = Math.floor(match.position / 2);
+        const isAka = match.position % 2 === 0;
 
-      await db.match.updateMany({
-        where: {
-          bracketId,
-          round: nextRound,
-          position: nextPosition,
-          isThirdPlace: false,
-        },
-        data: {
-          [isAka ? "akaId" : "aoId"]: match.winnerId,
-        },
-      });
-    }
-  }
+        return db.match.updateMany({
+          where: {
+            bracketId,
+            round: nextRound,
+            position: nextPosition,
+            isThirdPlace: false,
+          },
+          data: {
+            [isAka ? "akaId" : "aoId"]: match.winnerId,
+          },
+        });
+      })
+  );
 }

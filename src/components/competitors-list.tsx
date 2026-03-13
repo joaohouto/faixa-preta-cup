@@ -24,6 +24,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
+import { beltLabels, genderLabels } from "@/lib/constants/labels";
 import { Spinner } from "./luxe/spinner";
 import {
   Empty,
@@ -40,22 +41,6 @@ interface CompetitorsListProps {
   onRefresh: () => void;
 }
 
-const beltLabels: Record<string, string> = {
-  WHITE: "Branca",
-  BLUE: "Azul",
-  YELLOW: "Amarela",
-  RED: "Vermelha",
-  ORANGE: "Laranja",
-  GREEN: "Verde",
-  PURPLE: "Roxa",
-  BROWN: "Marrom",
-  BLACK: "Preta",
-};
-
-const genderLabels: Record<string, string> = {
-  MALE: "Masculino",
-  FEMALE: "Feminino",
-};
 
 export function CompetitorsList({
   tournamentId,

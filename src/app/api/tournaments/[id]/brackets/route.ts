@@ -56,65 +56,41 @@ export async function POST(
           kumiteGroups.get(cat)!.push(c);
         });
 
-      const createdBrackets = [];
+      async function generateBracketsForGroup(
+        groups: Map<string, typeof competitors>,
+        modality: Modality
+      ) {
+        const created = [];
+        for (const [cat, comps] of groups.entries()) {
+          const existing = await db.bracket.findUnique({
+            where: { tournamentId_category: { tournamentId, category: cat } },
+          });
 
-      // Gerar brackets para Kata
-      for (const [cat, comps] of kataGroups.entries()) {
-        // Verificar se já existe
-        const existing = await db.bracket.findUnique({
-          where: {
-            tournamentId_category: { tournamentId, category: cat },
-          },
-        });
-
-        if (existing) {
-          if (existing.status !== "NOT_STARTED") {
-            continue; // Pular se já iniciou
+          if (existing) {
+            if (existing.status !== "NOT_STARTED") continue;
+            await db.bracket.delete({ where: { id: existing.id } });
           }
-          // Deletar e recriar
-          await db.bracket.delete({ where: { id: existing.id } });
-        }
 
-        const bracket = await generateBracket({
-          tournamentId,
-          category: cat,
-          modality: Modality.KATA,
-          competitors: comps,
-        });
+          const bracket = await generateBracket({
+            tournamentId,
+            category: cat,
+            modality,
+            competitors: comps,
+          });
 
-        if (bracket) {
-          await propagateByeWinners(bracket.id);
-          createdBrackets.push(bracket);
+          if (bracket) {
+            await propagateByeWinners(bracket.id);
+            created.push(bracket);
+          }
         }
+        return created;
       }
 
-      // Gerar brackets para Kumite
-      for (const [cat, comps] of kumiteGroups.entries()) {
-        const existing = await db.bracket.findUnique({
-          where: {
-            tournamentId_category: { tournamentId, category: cat },
-          },
-        });
-
-        if (existing) {
-          if (existing.status !== "NOT_STARTED") {
-            continue;
-          }
-          await db.bracket.delete({ where: { id: existing.id } });
-        }
-
-        const bracket = await generateBracket({
-          tournamentId,
-          category: cat,
-          modality: Modality.KUMITE,
-          competitors: comps,
-        });
-
-        if (bracket) {
-          await propagateByeWinners(bracket.id);
-          createdBrackets.push(bracket);
-        }
-      }
+      const [kataCreated, kumiteCreated] = await Promise.all([
+        generateBracketsForGroup(kataGroups, Modality.KATA),
+        generateBracketsForGroup(kumiteGroups, Modality.KUMITE),
+      ]);
+      const createdBrackets = [...kataCreated, ...kumiteCreated];
 
       return NextResponse.json({
         message: `${createdBrackets.length} chaves geradas com sucesso`,
