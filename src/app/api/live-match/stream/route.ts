@@ -17,8 +17,7 @@ export async function GET(req: NextRequest) {
     async start(controller) {
       let lastData: string | null = null;
 
-      // Polling interval
-      const intervalId = setInterval(async () => {
+      const sendUpdate = async () => {
         try {
           const liveMatch = await db.liveMatch.findUnique({
             where: { tournamentId },
@@ -36,7 +35,13 @@ export async function GET(req: NextRequest) {
         } catch (error) {
           console.error("SSE Error:", error);
         }
-      }, 200); // Atualização a cada 200ms
+      };
+
+      // Send current state immediately on connection (don't wait for first tick)
+      await sendUpdate();
+
+      // Then keep polling for changes
+      const intervalId = setInterval(sendUpdate, 2000);
 
       // Cleanup
       req.signal.addEventListener("abort", () => {

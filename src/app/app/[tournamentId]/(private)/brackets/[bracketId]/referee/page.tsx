@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { Match, Competitor, Bracket } from "@prisma/client";
 import { toast } from "sonner";
 import {
@@ -66,7 +66,7 @@ const TIME_OPTIONS = [
 // Função para determinar o tipo de luta
 const getMatchTypeLabel = (
   match: MatchWithCompetitors,
-  bracket: Bracket | null
+  bracket: Bracket | null,
 ): { label: string; variant: "default" | "secondary" | "destructive" } => {
   if (match.isThirdPlace) {
     return { label: "3º LUGAR", variant: "destructive" };
@@ -94,7 +94,7 @@ export default function RefereePage({
   } | null>(null);
 
   const [currentMatch, setCurrentMatch] = useState<MatchWithCompetitors | null>(
-    null
+    null,
   );
   const [allMatches, setAllMatches] = useState<MatchWithCompetitors[]>([]);
   const [bracket, setBracket] = useState<Bracket | null>(null);
@@ -116,6 +116,9 @@ export default function RefereePage({
   const [showWinnerDialog, setShowWinnerDialog] = useState(false);
   const [selectedWinner, setSelectedWinner] = useState<string | null>(null);
 
+  // Tracks the winner being announced so broadcastState includes it
+  const announcedWinnerRef = useRef<"aka" | "ao" | null>(null);
+
   useHotkeys(
     "space",
     () => {
@@ -128,7 +131,7 @@ export default function RefereePage({
       preventDefault: true,
       enableOnFormTags: true,
       enableOnContentEditable: true,
-    }
+    },
   );
 
   useEffect(() => {
@@ -164,10 +167,33 @@ export default function RefereePage({
     return () => clearInterval(interval);
   }, [liveState.timerRunning, liveState.timeRemaining]);
 
+  // Broadcast immediately on score/penalty/senshu/timer-control changes
   useEffect(() => {
-    if (!currentMatch || !currentMatch.aka || !currentMatch.ao) return;
+    if (!currentMatch?.aka || !currentMatch?.ao || !bracket) return;
     broadcastState();
-  }, [liveState, currentMatch]);
+  }, [
+    liveState.akaScore,
+    liveState.aoScore,
+    liveState.akaChui,
+    liveState.aoChui,
+    liveState.akaSenshu,
+    liveState.aoSenshu,
+    liveState.timerRunning, // pause/resume must sync immediately
+    currentMatch,
+  ]);
+
+  // Heartbeat: sync timer to DB at most every 10s during active countdown
+  // (scoreboard runs local timer, so per-second writes are wasteful)
+  const lastTimerBroadcastRef = useRef(0);
+  useEffect(() => {
+    if (!currentMatch?.aka || !currentMatch?.ao || !bracket) return;
+    if (!liveState.timerRunning) return;
+    const now = Date.now();
+    if (now - lastTimerBroadcastRef.current >= 10_000) {
+      lastTimerBroadcastRef.current = now;
+      broadcastState();
+    }
+  }, [liveState.timeRemaining]);
 
   async function loadData() {
     try {
@@ -177,14 +203,14 @@ export default function RefereePage({
       const bracketRes = await fetch(
         `/api/tournaments/${resolvedParams!.tournamentId}/brackets/${
           resolvedParams!.bracketId
-        }`
+        }`,
       );
       const bracketData = await bracketRes.json();
       setBracket(bracketData);
 
       // Buscar competidores
       const compRes = await fetch(
-        `/api/tournaments/${resolvedParams!.tournamentId}/competitors`
+        `/api/tournaments/${resolvedParams!.tournamentId}/competitors`,
       );
       const competitors: Competitor[] = await compRes.json();
       const competitorsMap = new Map(competitors.map((c) => [c.id, c]));
@@ -210,7 +236,7 @@ export default function RefereePage({
         // Limpar live match
         await fetch(
           `/api/live-match?tournamentId=${resolvedParams!.tournamentId}`,
-          { method: "DELETE" }
+          { method: "DELETE" },
         );
         setCurrentMatch(null);
       }
@@ -244,6 +270,7 @@ export default function RefereePage({
           round: currentMatch.round,
           position: currentMatch.position,
           ...liveState,
+          winner: announcedWinnerRef.current,
         }),
       });
     } catch (error) {
@@ -269,7 +296,7 @@ export default function RefereePage({
   }
 
   async function finalizeSave(winnerId: string, hantei: boolean) {
-    if (!currentMatch) return;
+    if (!currentMatch || !bracket) return;
 
     setSaving(true);
     try {
@@ -286,37 +313,27 @@ export default function RefereePage({
             winnerId,
             decisionByHantei: hantei,
           }),
-        }
+        },
       );
 
-      // Recarregar dados
+      // Announce winner on scoreboard before loading the next match
+      const winningSide = winnerId === currentMatch.akaId ? "aka" : "ao";
+      announcedWinnerRef.current = winningSide;
+      await broadcastState();
+      await new Promise((resolve) => setTimeout(resolve, 4000));
+      announcedWinnerRef.current = null;
+
+      // Load next match (triggers broadcast with winner=null via Effect A)
       await loadData();
 
       const hasMoreMatches = allMatches.some(
-        (m) => !m.isCompleted && m.id !== currentMatch.id
+        (m) => !m.isCompleted && m.id !== currentMatch.id,
       );
 
-      // Se não houver mais lutas, mostrar campeão antes de excluir
       if (!hasMoreMatches) {
-        // Notificar campeão final
-        const finalMatch = allMatches.find(
-          (m) => m.round === bracket?.totalRounds && !m.isThirdPlace
-        );
-        if (finalMatch) {
-          const champion =
-            finalMatch.winnerId === finalMatch.akaId ? "aka" : "ao";
-
-          // Enviar notificação de campeão
-          await broadcastChampion(champion);
-
-          // Aguardar 5 segundos para mostrar no scoreboard
-          await new Promise((resolve) => setTimeout(resolve, 5000));
-        }
-
-        // Agora limpar live match
         await fetch(
           `/api/live-match?tournamentId=${resolvedParams!.tournamentId}`,
-          { method: "DELETE" }
+          { method: "DELETE" },
         );
       }
 
@@ -328,21 +345,6 @@ export default function RefereePage({
     } finally {
       setSaving(false);
     }
-  }
-
-  async function broadcastChampion(winner: "aka" | "ao") {
-    // Enviar notificação especial de campeão
-    await fetch(`/api/live-match`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        tournamentId: resolvedParams!.tournamentId,
-        matchId: "champion",
-        bracketId: resolvedParams!.bracketId,
-        ...liveState,
-        champion: winner,
-      }),
-    });
   }
 
   function handleTimeChange(value: string) {
@@ -478,7 +480,7 @@ export default function RefereePage({
                 </Button>
               </Link>
               <Link
-                href={`/app/${resolvedParams?.tournamentId}/brackets`}
+                href={`/app/${resolvedParams?.tournamentId}/brackets#bracket-${resolvedParams?.bracketId}`}
                 className="flex-1"
               >
                 <Button variant="outline" className="w-full" size="lg">
@@ -584,7 +586,7 @@ export default function RefereePage({
                       "text-8xl font-mono font-semibold",
                       liveState.timerRunning
                         ? "text-yellow-400"
-                        : "text-foreground"
+                        : "text-foreground",
                     )}
                   >
                     {String(minutes).padStart(2, "0")}:
@@ -825,8 +827,8 @@ export default function RefereePage({
                         match.id === currentMatch.id
                           ? "border-primary bg-primary/5"
                           : match.isCompleted
-                          ? "border-green-500/30 bg-green-500/5"
-                          : "border-border"
+                            ? "border-green-500/30 bg-green-500/5"
+                            : "border-border",
                       )}
                     >
                       <div className="flex items-center justify-between mb-2">

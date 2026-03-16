@@ -215,6 +215,9 @@ model LiveMatch {
   timeRemaining Int     @default(120)
   timerRunning  Boolean @default(false)
 
+  // Vencedor anunciado (aka | ao | null)
+  winner String?
+
   // Controle
   isActive  Boolean  @default(true)
   startedAt DateTime @default(now())

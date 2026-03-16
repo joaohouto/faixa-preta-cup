@@ -52,36 +52,108 @@ export async function generateBracket(input: BracketGenerationInput) {
   return bracket;
 }
 
+/**
+ * Ordem de preenchimento: do miolo para as bordas.
+ * 4 matches → [1, 2, 0, 3]
+ * 8 matches → [3, 4, 2, 5, 1, 6, 0, 7]
+ */
+function getSeededPositions(numMatches: number): number[] {
+  if (numMatches <= 1) return [0];
+
+  const positions: number[] = [];
+  const half = numMatches / 2;
+
+  for (let i = 0; i < half; i++) {
+    positions.push(half - 1 - i);
+    positions.push(half + i);
+  }
+
+  return positions;
+}
+
+/**
+ * Quantas vagas cada posição recebe:
+ * - Positions do miolo (primeira metade da ordem seeded) recebem 2 cada.
+ * - Positions das bordas (segunda metade) recebem o restante distribuído
+ *   proporcionalmente (1 por ponta até acabar), nunca mais que 2.
+ *
+ * Exemplos para 4 matches:
+ *   6 comps → miolo [1,2]=2 cada, bordas [0,3]=1 cada
+ *   5 comps → miolo [1,2]=2 cada, borda [0]=1, borda [3]=0
+ *   7 comps → miolo [1,2]=2 cada, bordas [0]=2, [3]=1
+ */
+function computeSlots(
+  seeded: number[],
+  numCompetitors: number,
+): Record<number, number> {
+  const numMatches = seeded.length;
+  const numMiddle = numMatches / 2;
+  const middlePositions = seeded.slice(0, numMiddle);
+  const edgePositions = seeded.slice(numMiddle);
+
+  const slots: Record<number, number> = {};
+  for (const pos of seeded) slots[pos] = 0;
+
+  let remaining = numCompetitors;
+
+  // Middles: 2 por posição
+  for (const pos of middlePositions) {
+    const take = Math.min(2, remaining);
+    slots[pos] = take;
+    remaining -= take;
+    if (remaining === 0) break;
+  }
+
+  // Bordas: distribuição proporcional com ceil (1 por ponta até esgotar)
+  for (let i = 0; i < edgePositions.length && remaining > 0; i++) {
+    const take = Math.min(Math.ceil(remaining / (edgePositions.length - i)), 2);
+    slots[edgePositions[i]] = take;
+    remaining -= take;
+  }
+
+  return slots;
+}
+
 async function generateFirstRoundMatches(
   bracketId: string,
   competitors: Competitor[],
-  totalSlots: number
+  totalSlots: number,
 ) {
   const numMatches = totalSlots / 2;
-  const matches = [];
-  let compIndex = 0;
+  const seeded = getSeededPositions(numMatches);
+  const slots = computeSlots(seeded, competitors.length);
 
+  // Atribui competidores às posições na ordem seeded, respeitando o slot count
+  let compIndex = 0;
+  const matchData: Record<number, { aka: Competitor | null; ao: Competitor | null }> = {};
+
+  for (const pos of seeded) {
+    const count = slots[pos];
+    matchData[pos] = {
+      aka: count >= 1 ? competitors[compIndex++] : null,
+      ao:  count >= 2 ? competitors[compIndex++] : null,
+    };
+  }
+
+  const matches = [];
   for (let i = 0; i < numMatches; i++) {
-    const aka =
-      compIndex < competitors.length ? competitors[compIndex++] : null;
-    const ao = compIndex < competitors.length ? competitors[compIndex++] : null;
+    const { aka, ao } = matchData[i];
 
     const match: any = {
       bracketId,
       round: 1,
       position: i,
-      akaId: aka?.id || null,
-      aoId: ao?.id || null,
+      akaId: aka?.id ?? null,
+      aoId:  ao?.id  ?? null,
       isBye: !aka || !ao,
       isCompleted: false,
     };
 
-    // Se é bye, já define o vencedor
-    if (!aka && ao) {
-      match.winnerId = ao.id;
-      match.isCompleted = true;
-    } else if (aka && !ao) {
+    if (aka && !ao) {
       match.winnerId = aka.id;
+      match.isCompleted = true;
+    } else if (!aka && ao) {
+      match.winnerId = ao.id;
       match.isCompleted = true;
     }
 

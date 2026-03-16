@@ -34,6 +34,7 @@ export async function POST(req: Request) {
       aoSenshu,
       timeRemaining,
       timerRunning,
+      winner,
     } = body;
 
     // Verificar ownership
@@ -68,6 +69,7 @@ export async function POST(req: Request) {
       aoSenshu,
       timeRemaining,
       timerRunning,
+      winner: winner ?? null,
     };
 
     const liveMatch = await db.liveMatch.upsert({

@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { beltLabels, genderLabels } from "@/lib/constants/labels";
+import { cn } from "@/lib/utils";
 
 import {
   Card,
@@ -139,19 +140,27 @@ export default function BracketsPage({
   async function refreshBrackets() {
     try {
       const bracketsRes = await fetch(
-        `/api/tournaments/${resolvedParams!.tournamentId}/brackets`
+        `/api/tournaments/${resolvedParams!.tournamentId}/brackets`,
       );
       if (!bracketsRes.ok) throw new Error("Failed to fetch brackets");
       const bracketsData: BracketWithCount[] = await bracketsRes.json();
 
       setBrackets(bracketsData);
-      const bracketsMap = new Map(bracketsData.map((b: BracketWithCount) => [b.category, b]));
+      const bracketsMap = new Map(
+        bracketsData.map((b: BracketWithCount) => [b.category, b]),
+      );
 
       setKataCategories((prev: CategoryGroup[]) =>
-        prev.map((cat: CategoryGroup) => ({ ...cat, bracket: bracketsMap.get(cat.category) }))
+        prev.map((cat: CategoryGroup) => ({
+          ...cat,
+          bracket: bracketsMap.get(cat.category),
+        })),
       );
       setKumiteCategories((prev: CategoryGroup[]) =>
-        prev.map((cat: CategoryGroup) => ({ ...cat, bracket: bracketsMap.get(cat.category) }))
+        prev.map((cat: CategoryGroup) => ({
+          ...cat,
+          bracket: bracketsMap.get(cat.category),
+        })),
       );
     } catch (error) {
       toast.error("Falha ao atualizar chaves.");
@@ -159,24 +168,29 @@ export default function BracketsPage({
   }
 
   function applyBracketsToCategories(
-    categoriesData: { kataCategories: CategoryGroup[]; kumiteCategories: CategoryGroup[] },
-    bracketsData: BracketWithCount[]
+    categoriesData: {
+      kataCategories: CategoryGroup[];
+      kumiteCategories: CategoryGroup[];
+    },
+    bracketsData: BracketWithCount[],
   ) {
     setBrackets(bracketsData);
-    const bracketsMap = new Map(bracketsData.map((b: BracketWithCount) => [b.category, b]));
+    const bracketsMap = new Map(
+      bracketsData.map((b: BracketWithCount) => [b.category, b]),
+    );
 
     setKataCategories(
       categoriesData.kataCategories.map((cat: CategoryGroup) => ({
         ...cat,
         bracket: bracketsMap.get(cat.category),
-      }))
+      })),
     );
 
     setKumiteCategories(
       categoriesData.kumiteCategories.map((cat: CategoryGroup) => ({
         ...cat,
         bracket: bracketsMap.get(cat.category),
-      }))
+      })),
     );
   }
 
@@ -189,7 +203,7 @@ export default function BracketsPage({
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ generateAll: true }),
-        }
+        },
       );
 
       if (!res.ok) {
@@ -217,7 +231,7 @@ export default function BracketsPage({
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ category, modality }),
-        }
+        },
       );
 
       if (!res.ok) {
@@ -250,7 +264,7 @@ export default function BracketsPage({
     try {
       const res = await fetch(
         `/api/tournaments/${resolvedParams!.tournamentId}/brackets/${bracketId}`,
-        { method: "DELETE" }
+        { method: "DELETE" },
       );
 
       if (!res.ok) throw new Error("Falha ao excluir chave");
@@ -258,16 +272,18 @@ export default function BracketsPage({
       toast.success("Chave excluída com sucesso!");
 
       // Update state directly without full reload
-      setBrackets((prev: BracketWithCount[]) => prev.filter((b: BracketWithCount) => b.id !== bracketId));
+      setBrackets((prev: BracketWithCount[]) =>
+        prev.filter((b: BracketWithCount) => b.id !== bracketId),
+      );
       setKataCategories((prev: CategoryGroup[]) =>
         prev.map((cat: CategoryGroup) =>
-          cat.bracket?.id === bracketId ? { ...cat, bracket: undefined } : cat
-        )
+          cat.bracket?.id === bracketId ? { ...cat, bracket: undefined } : cat,
+        ),
       );
       setKumiteCategories((prev: CategoryGroup[]) =>
         prev.map((cat: CategoryGroup) =>
-          cat.bracket?.id === bracketId ? { ...cat, bracket: undefined } : cat
-        )
+          cat.bracket?.id === bracketId ? { ...cat, bracket: undefined } : cat,
+        ),
       );
     } catch (error) {
       toast.error("Erro ao excluir chave");
@@ -291,22 +307,26 @@ export default function BracketsPage({
 
   const stats = {
     totalBrackets: brackets.length,
-    inProgress: brackets.filter((b: BracketWithCount) => b.status === "IN_PROGRESS").length,
-    completed: brackets.filter((b: BracketWithCount) => b.status === "COMPLETED").length,
+    inProgress: brackets.filter(
+      (b: BracketWithCount) => b.status === "IN_PROGRESS",
+    ).length,
+    completed: brackets.filter(
+      (b: BracketWithCount) => b.status === "COMPLETED",
+    ).length,
   };
 
   return (
-    <div className="container mx-auto p-6">
+    <div className="container mx-auto p-6 print:p-0">
       {/* Header */}
       <div className="mb-6">
         <h1 className="text-3xl font-bold mb-2">Chaves e Categorias</h1>
-        <p className="text-muted-foreground">
+        <p className="text-muted-foreground print:hidden">
           Gerencie categorias e suas chaves de competição
         </p>
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6 print:hidden">
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="text-sm font-medium text-muted-foreground">
@@ -365,7 +385,7 @@ export default function BracketsPage({
       </div>
 
       {/* Generate All Button */}
-      <div className="mb-6">
+      <div className="mb-6 print:hidden">
         <Button
           size="lg"
           onClick={() => setConfirmGenerateAll(true)}
@@ -387,7 +407,7 @@ export default function BracketsPage({
 
       {/* Tabs */}
       <Tabs defaultValue="kata" className="w-full">
-        <TabsList className="grid w-full grid-cols-2 max-w-md">
+        <TabsList className="grid w-full grid-cols-2 max-w-md print:hidden">
           <TabsTrigger value="kata">Kata ({kataCategories.length})</TabsTrigger>
           <TabsTrigger value="kumite">
             Kumite ({kumiteCategories.length})
@@ -517,13 +537,13 @@ export default function BracketsPage({
               <div className="space-y-2">
                 {deleteTarget?.status === "IN_PROGRESS" && (
                   <div className="rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-destructive text-sm font-medium">
-                    ⚠️ Esta chave está em andamento! Todos os resultados
+                    Esta chave está em andamento! Todos os resultados
                     registrados serão perdidos.
                   </div>
                 )}
                 {deleteTarget?.status === "COMPLETED" && (
                   <div className="rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-destructive text-sm font-medium">
-                    ⚠️ Esta chave já foi concluída! O histórico completo da
+                    Esta chave já foi concluída! O histórico completo da
                     competição será perdido.
                   </div>
                 )}
@@ -572,7 +592,7 @@ function CategoryCard({
   const StatusIcon = group.bracket ? statusIcons[group.bracket.status] : Clock;
 
   return (
-    <Card>
+    <Card id={group.bracket ? `bracket-${group.bracket.id}` : undefined}>
       <CardHeader>
         <div className="flex items-start justify-between gap-4">
           <div className="flex-1">
@@ -581,12 +601,23 @@ function CategoryCard({
 
               {group.bracket && (
                 <Badge
-                  variant={
-                    group.bracket.status === "COMPLETED" ? "default" : "outline"
-                  }
-                  className="flex items-center gap-1"
+                  variant="outline"
+                  className={cn(
+                    "flex items-center gap-1 print:hidden",
+                    group.bracket.status === "NOT_STARTED" &&
+                      "text-muted-foreground",
+                    group.bracket.status === "IN_PROGRESS" &&
+                      "border-blue-500/40 bg-blue-500/10 text-blue-600 dark:text-blue-400",
+                    group.bracket.status === "COMPLETED" &&
+                      "border-green-500/40 bg-green-500/10 text-green-600 dark:text-green-400",
+                  )}
                 >
-                  <StatusIcon />
+                  <StatusIcon
+                    className={cn(
+                      "size-3",
+                      group.bracket.status === "IN_PROGRESS" && "animate-pulse",
+                    )}
+                  />
                   {statusLabels[group.bracket.status]}
                 </Badge>
               )}
@@ -597,7 +628,7 @@ function CategoryCard({
             </CardDescription>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 print:hidden">
             {group.bracket ? (
               <>
                 {/* Ver Chave */}
@@ -624,13 +655,13 @@ function CategoryCard({
 
                 {/* Deletar */}
                 <Button
-                  size="sm"
-                  variant="ghost"
+                  size="icon"
+                  variant="outline"
                   onClick={() =>
                     onDeleteBracket(group.bracket!.id, group.category)
                   }
                   disabled={isLoading}
-                  className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                  className="text-destructive border-destructive/30 hover:bg-destructive/10 hover:border-destructive/60"
                 >
                   {isLoading ? (
                     <Loader2 className="animate-spin" />

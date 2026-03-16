@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { Match, Bracket, Competitor } from "@prisma/client";
 import { toast } from "sonner";
-import { ArrowLeft, Trophy, Medal, Play, Flag } from "lucide-react";
+import { ArrowLeft, Trophy, Medal, Flag } from "lucide-react";
 import Link from "next/link";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { MatchResultDialog } from "@/components/match-result-dialog";
+import { cn } from "@/lib/utils";
 
 type MatchWithCompetitors = Match & {
   aka?: Competitor;
@@ -60,14 +61,14 @@ export default function BracketDetailPage({
       const res = await fetch(
         `/api/tournaments/${resolvedParams!.tournamentId}/brackets/${
           resolvedParams!.bracketId
-        }`
+        }`,
       );
       if (!res.ok) throw new Error("Falha ao buscar chave");
       const data = await res.json();
 
       // Fetch competitors
       const compRes = await fetch(
-        `/api/tournaments/${resolvedParams!.tournamentId}/competitors`
+        `/api/tournaments/${resolvedParams!.tournamentId}/competitors`,
       );
       if (!compRes.ok) throw new Error("Falha ao carregar competidores");
       const competitors: Competitor[] = await compRes.json();
@@ -132,17 +133,19 @@ export default function BracketDetailPage({
   // Encontrar matches especiais
   const thirdPlaceMatch = bracket.matches.find((m) => m.isThirdPlace);
   const finalMatch = bracket.matches.find(
-    (m) => m.round === bracket.totalRounds && !m.isThirdPlace
+    (m) => m.round === bracket.totalRounds && !m.isThirdPlace,
   );
 
   const champion = finalMatch?.winner;
-  const thirdPlace = thirdPlaceMatch?.winner;
 
   return (
-    <div className="container mx-auto p-6">
+    <div className="container mx-auto p-6 print:p-0">
       {/* Header */}
       <div className="mb-6 flex items-center gap-4">
-        <Link href={`/app/${resolvedParams?.tournamentId}/brackets`}>
+        <Link
+          href={`/app/${resolvedParams?.tournamentId}/brackets`}
+          className="print:hidden"
+        >
           <Button variant="ghost" size="icon">
             <ArrowLeft />
           </Button>
@@ -150,15 +153,20 @@ export default function BracketDetailPage({
         <div className="flex-1">
           <h1 className="text-2xl font-bold font-mono">{bracket.category}</h1>
           <div className="flex items-center gap-2 mt-1">
+            <Badge variant="secondary">{bracket.modality}</Badge>
             <Badge
-              variant="secondary"
-              className={
-                bracket.modality === "KATA"
-                  ? "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200"
-                  : "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200"
-              }
+              variant="outline"
+              className={cn(
+                bracket.status === "IN_PROGRESS" &&
+                  "border-blue-500/40 bg-blue-500/10 text-blue-600 dark:text-blue-400",
+                bracket.status === "COMPLETED" &&
+                  "border-green-500/40 bg-green-500/10 text-green-600 dark:text-green-400",
+                bracket.status === "NOT_STARTED" && "text-muted-foreground",
+              )}
             >
-              {bracket.modality}
+              {bracket.status === "NOT_STARTED" && "Não iniciado"}
+              {bracket.status === "IN_PROGRESS" && "Em andamento"}
+              {bracket.status === "COMPLETED" && "Concluído"}
             </Badge>
             <span className="text-sm text-muted-foreground">
               {bracket.totalSlots} vagas • {bracket.totalRounds} rodadas
@@ -166,7 +174,7 @@ export default function BracketDetailPage({
           </div>
         </div>
 
-        <Button asChild variant="outline">
+        <Button asChild variant="outline" className="print:hidden">
           <Link
             href={`/app/${resolvedParams?.tournamentId}/brackets/${resolvedParams?.bracketId}/referee`}
           >
@@ -193,20 +201,20 @@ export default function BracketDetailPage({
 
       {/* Tabs: Chave Visual vs Lista */}
       <Tabs defaultValue="bracket" className="w-full">
-        <TabsList className="grid w-full grid-cols-2 max-w-md">
+        <TabsList className="grid w-full grid-cols-2 max-w-md print:hidden">
           <TabsTrigger value="bracket">Visualização de Chave</TabsTrigger>
           <TabsTrigger value="list">Lista de Lutas</TabsTrigger>
         </TabsList>
 
         {/* Visualização de Chave */}
-        <TabsContent value="bracket" className="mt-6">
+        <TabsContent value="bracket" className="mt-6 print:block">
           <Card>
             <CardContent className="p-6 overflow-x-auto">
               <div className="flex min-w-max pb-12">
                 {/* Adicionado pb-12 para scroll seguro */}
                 {rounds.map((roundNum, index) => {
                   const roundMatches = matchesByRound[roundNum].filter(
-                    (m) => !m.isThirdPlace
+                    (m) => !m.isThirdPlace,
                   );
                   const isFinal = roundNum === bracket.totalRounds;
 
@@ -230,10 +238,10 @@ export default function BracketDetailPage({
                             {isFinal
                               ? "FINAL"
                               : roundNum === bracket.totalRounds - 1
-                              ? "SEMIFINAL"
-                              : roundNum === bracket.totalRounds - 2
-                              ? "QUARTAS"
-                              : `R${roundNum}`}
+                                ? "SEMIFINAL"
+                                : roundNum === bracket.totalRounds - 2
+                                  ? "QUARTAS"
+                                  : `R${roundNum}`}
                           </Badge>
                         </div>
                         {/* Container das Lutas com espaçamento calculado */}
@@ -306,8 +314,8 @@ export default function BracketDetailPage({
                     {roundNum === bracket.totalRounds
                       ? "Final"
                       : roundNum === bracket.totalRounds - 1
-                      ? "Semifinal"
-                      : `Rodada ${roundNum}`}
+                        ? "Semifinal"
+                        : `Rodada ${roundNum}`}
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-3">
@@ -446,26 +454,27 @@ export default function BracketDetailPage({
 // Componente de Match Card
 function MatchCard({
   match,
-  onRefresh,
   onOpenResult,
-  isThirdPlace = false,
 }: {
   match: MatchWithCompetitors;
-  onRefresh: () => void;
+  onRefresh?: () => void;
   onOpenResult: (match: MatchWithCompetitors) => void;
   isThirdPlace?: boolean;
 }) {
   const canEdit = match.aka && match.ao && !match.isBye;
+  const isCompleted = match.isCompleted;
+  const isReady = canEdit && !isCompleted;
 
   return (
     <Card
-      className={`w-56 p-0 z-10 ${
-        match.isBye
-          ? "bg-muted/50"
-          : canEdit
-          ? "hover:shadow-lg transition-all cursor-pointer hover:scale-105"
-          : "opacity-60"
-      }`}
+      className={cn(
+        "w-56 p-0 z-10 transition-all",
+        match.isBye && "bg-muted/50",
+        isCompleted && "border-green-500/40",
+        isReady &&
+          "cursor-pointer hover:shadow-lg hover:scale-105 border-blue-400/60",
+        !canEdit && !match.isBye && "opacity-60",
+      )}
       onClick={() => canEdit && onOpenResult(match)}
     >
       <CardContent className="p-0 relative">
@@ -528,9 +537,9 @@ function MatchCard({
           </div>
         )}
 
-        {/* Indicador de que pode clicar */}
-        {canEdit && !match.isCompleted && (
-          <div className="absolute top-2 right-2">
+        {/* Status indicator */}
+        {isReady && (
+          <div className="absolute top-2 right-2 flex items-center gap-1">
             <div className="h-2 w-2 bg-blue-500 rounded-full animate-pulse" />
           </div>
         )}
