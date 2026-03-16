@@ -5,6 +5,7 @@ import {
   getKataCategory,
   getKumiteCategory,
 } from "@/lib/utils/classification";
+import { competitorSchema } from "@/lib/schemas/competitor";
 import { NextResponse } from "next/server";
 
 export async function PUT(
@@ -18,15 +19,39 @@ export async function PUT(
       return new NextResponse("Unauthorized", { status: 401 });
     }
 
+    const { id: tournamentId, competitorId } = await context.params;
     const body = await req.json();
-    const { competitorId } = await context.params;
 
-    const competitorData = {
-      ...body,
-      birthdate: new Date(body.birthdate),
-    };
+    // Verificar ownership do torneio
+    const tournament = await db.tournament.findUnique({
+      where: { id: tournamentId },
+    });
 
-    const idade = calculateAge(competitorData.birthdate);
+    if (!tournament || tournament.organizerId !== session.user.id) {
+      return new NextResponse("Unauthorized", { status: 401 });
+    }
+
+    // Verificar se competidor pertence ao torneio
+    const existingCompetitor = await db.competitor.findUnique({
+      where: { id: competitorId },
+    });
+
+    if (!existingCompetitor || existingCompetitor.tournamentId !== tournamentId) {
+      return new NextResponse("Competitor not found", { status: 404 });
+    }
+
+    const validation = competitorSchema.safeParse(body);
+    if (!validation.success) {
+      return NextResponse.json(
+        { error: "Dados inválidos", details: validation.error.issues },
+        { status: 400 }
+      );
+    }
+
+    const competitorData = validation.data;
+    const birthdate = new Date(competitorData.birthdate);
+
+    const idade = calculateAge(birthdate);
     const categoriaKata = competitorData.kata
       ? getKataCategory(idade, competitorData.gender, competitorData.belt)
       : null;
@@ -34,7 +59,7 @@ export async function PUT(
       ? getKumiteCategory(
           idade,
           competitorData.gender,
-          competitorData.weight,
+          competitorData.weight ?? null,
           competitorData.belt
         )
       : null;
@@ -42,7 +67,14 @@ export async function PUT(
     const updatedCompetitor = await db.competitor.update({
       where: { id: competitorId },
       data: {
-        ...competitorData,
+        name: competitorData.name,
+        gender: competitorData.gender,
+        weight: competitorData.weight,
+        birthdate,
+        belt: competitorData.belt,
+        school: competitorData.school,
+        kata: competitorData.kata,
+        kumite: competitorData.kumite,
         age: idade,
         kataCategory: categoriaKata,
         kumiteCategory: categoriaKumite,

@@ -5,6 +5,7 @@ import {
   getKataCategory,
   getKumiteCategory,
 } from "@/lib/utils/classification";
+import { competitorSchema } from "@/lib/schemas/competitor";
 import { NextResponse } from "next/server";
 
 export async function POST(
@@ -30,10 +31,15 @@ export async function POST(
       return new NextResponse("Unauthorized", { status: 401 });
     }
 
-    const competitorData = {
-      ...body,
-      tournamentId,
-    };
+    const validation = competitorSchema.safeParse(body);
+    if (!validation.success) {
+      return NextResponse.json(
+        { error: "Dados inválidos", details: validation.error.issues },
+        { status: 400 }
+      );
+    }
+
+    const competitorData = validation.data;
 
     const age = calculateAge(new Date(competitorData.birthdate));
     const kataCategory = competitorData.kata
@@ -43,7 +49,7 @@ export async function POST(
       ? getKumiteCategory(
           age,
           competitorData.gender,
-          competitorData.weight,
+          competitorData.weight ?? null,
           competitorData.belt
         )
       : null;
