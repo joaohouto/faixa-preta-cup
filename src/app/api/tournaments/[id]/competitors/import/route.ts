@@ -49,6 +49,21 @@ export async function POST(
       return new NextResponse("No file uploaded", { status: 400 });
     }
 
+    const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
+    if (file.size > MAX_FILE_SIZE) {
+      return new NextResponse("Arquivo muito grande (máximo 5MB)", { status: 400 });
+    }
+
+    const isValidType =
+      file.type === "text/csv" ||
+      file.type === "application/csv" ||
+      file.type === "text/plain" ||
+      file.name.toLowerCase().endsWith(".csv");
+
+    if (!isValidType) {
+      return new NextResponse("Apenas arquivos CSV são permitidos", { status: 400 });
+    }
+
     const csv = await file.text();
 
     const parsed = Papa.parse(csv, {

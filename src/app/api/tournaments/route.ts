@@ -1,6 +1,11 @@
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/prisma";
 import { NextResponse } from "next/server";
+import { z } from "zod";
+
+const createTournamentSchema = z.object({
+  name: z.string().min(1, "Nome é obrigatório").max(200, "Nome muito longo"),
+});
 
 export async function POST(req: Request) {
   try {
@@ -11,10 +16,17 @@ export async function POST(req: Request) {
     }
 
     const body = await req.json();
+    const validation = createTournamentSchema.safeParse(body);
+    if (!validation.success) {
+      return NextResponse.json(
+        { error: "Dados inválidos", details: validation.error.issues },
+        { status: 400 }
+      );
+    }
 
     const tournament = await db.tournament.create({
       data: {
-        name: body.name,
+        name: validation.data.name,
         organizerId: session.user.id,
       },
     });

@@ -9,7 +9,7 @@ interface BracketGenerationInput {
 }
 
 // Calcula próxima potência de 2
-function nextPowerOf2(n: number): number {
+export function nextPowerOf2(n: number): number {
   return Math.pow(2, Math.ceil(Math.log2(n)));
 }
 
@@ -57,7 +57,7 @@ export async function generateBracket(input: BracketGenerationInput) {
  * 4 matches → [1, 2, 0, 3]
  * 8 matches → [3, 4, 2, 5, 1, 6, 0, 7]
  */
-function getSeededPositions(numMatches: number): number[] {
+export function getSeededPositions(numMatches: number): number[] {
   if (numMatches <= 1) return [0];
 
   const positions: number[] = [];
@@ -82,7 +82,7 @@ function getSeededPositions(numMatches: number): number[] {
  *   5 comps → miolo [1,2]=2 cada, borda [0]=1, borda [3]=0
  *   7 comps → miolo [1,2]=2 cada, bordas [0]=2, [3]=1
  */
-function computeSlots(
+export function computeSlots(
   seeded: number[],
   numCompetitors: number,
 ): Record<number, number> {
