@@ -16,12 +16,16 @@ export async function GET(req: NextRequest) {
   const stream = new ReadableStream({
     async start(controller) {
       let lastData: string | null = null;
+      let closed = false;
 
       const sendUpdate = async () => {
+        if (closed) return;
         try {
           const liveMatch = await db.liveMatch.findUnique({
             where: { tournamentId },
           });
+
+          if (closed) return;
 
           const data = liveMatch
             ? `data: ${JSON.stringify(liveMatch)}\n\n`
@@ -45,6 +49,7 @@ export async function GET(req: NextRequest) {
 
       // Cleanup
       req.signal.addEventListener("abort", () => {
+        closed = true;
         clearInterval(intervalId);
         controller.close();
       });

@@ -37,9 +37,10 @@ export async function POST(req: Request) {
       winner,
     } = body;
 
-    // Verificar ownership
+    // Verificar ownership — select mínimo, só o campo necessário
     const tournament = await db.tournament.findUnique({
       where: { id: tournamentId },
+      select: { organizerId: true },
     });
 
     if (!tournament || tournament.organizerId !== session.user.id) {
@@ -124,9 +125,10 @@ export async function DELETE(req: Request) {
       return new NextResponse("Tournament ID required", { status: 400 });
     }
 
-    // Verificar ownership
+    // Verificar ownership — select mínimo, só o campo necessário
     const tournament = await db.tournament.findUnique({
       where: { id: tournamentId },
+      select: { organizerId: true },
     });
 
     if (!tournament || tournament.organizerId !== session.user.id) {

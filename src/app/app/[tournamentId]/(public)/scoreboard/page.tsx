@@ -118,7 +118,7 @@ export default function ScoreboardPage({
             exit={{ opacity: 0 }}
             transition={{ duration: 0.35 }}
             className={cn(
-              "fixed inset-0 z-50 flex flex-col items-center justify-center text-center p-16 overflow-hidden",
+              "fixed inset-0 z-50 flex flex-col items-center justify-center text-center p-8 sm:p-16 overflow-hidden",
               winner.side === "aka" ? "bg-red-600" : "bg-blue-600",
             )}
           >
@@ -146,14 +146,17 @@ export default function ScoreboardPage({
               }}
               className="flex flex-col items-center"
             >
-              <Trophy className="size-40 text-white mb-8" />
+              <Trophy className="size-20 sm:size-28 md:size-36 lg:size-40 text-white mb-4 sm:mb-6 lg:mb-8" />
               <h2
-                className="text-white font-bold tracking-tight uppercase leading-none mb-5"
-                style={{ fontSize: "clamp(4rem, 10vw, 9rem)" }}
+                className="text-white font-bold tracking-tight uppercase leading-none mb-3 sm:mb-5"
+                style={{ fontSize: "clamp(2rem, 10vw, 9rem)" }}
               >
                 {winner.name}
               </h2>
-              <p className="text-white/90 text-4xl font-semibold tracking-widest uppercase">
+              <p
+                className="text-white/90 font-semibold tracking-widest uppercase"
+                style={{ fontSize: "clamp(1rem, 3.5vw, 2.5rem)" }}
+              >
                 {winner.school}
               </p>
             </motion.div>
@@ -181,7 +184,7 @@ export default function ScoreboardPage({
                 ease: "easeInOut",
               }}
             >
-              <FaixaPretaLogo className="h-16" />
+              <FaixaPretaLogo className="h-12 sm:h-16" />
             </motion.div>
           </motion.div>
         ) : (
@@ -192,32 +195,32 @@ export default function ScoreboardPage({
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -28 }}
             transition={{ duration: 0.4, ease: "easeOut" }}
-            className="scale-150 flex flex-col items-center justify-center gap-10"
+            className="w-full flex flex-col items-center justify-center gap-3 sm:gap-5 lg:gap-8 2xl:gap-10 px-3 sm:px-5 lg:px-8 2xl:px-10"
           >
             {/* Logo */}
-            <FaixaPretaLogo className="h-5 opacity-30" />
+            <FaixaPretaLogo className="h-4 sm:h-5 opacity-30" />
 
             {/* Competitor cards */}
-            <div className="grid grid-cols-2 gap-8 w-full max-w-6xl">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 lg:gap-6 2xl:gap-8 w-full">
               {/* AKA */}
               <section
                 className={cn(
-                  "grid grid-cols-[auto_200px] gap-4 border-2 p-6 rounded-2xl bg-card shadow-2xl transition-all duration-300",
+                  "grid grid-cols-[1fr_auto] gap-3 sm:gap-3 lg:gap-4 border-2 p-3 sm:p-4 lg:p-5 2xl:p-7 rounded-2xl bg-card shadow-2xl transition-all duration-300",
                   pulseSide === "aka"
                     ? "border-red-500 ring-4 ring-red-400/60 ring-offset-2"
                     : "border-red-500/50",
                 )}
               >
-                <div className="flex flex-col justify-between gap-3">
-                  <p className="text-sm font-medium text-muted-foreground tracking-wide uppercase leading-tight">
+                <div className="flex flex-col justify-between gap-2 sm:gap-2 lg:gap-3 min-w-0">
+                  <p className="font-medium text-muted-foreground tracking-wide uppercase leading-tight truncate text-[0.6rem] sm:text-xs md:text-xs lg:text-sm">
                     {liveMatch.akaSchool}
                   </p>
 
-                  <strong className="text-5xl leading-tight line-clamp-2">
+                  <strong className="leading-tight line-clamp-2 text-xl sm:text-2xl md:text-3xl lg:text-4xl xl:text-5xl">
                     {liveMatch.akaName}
                   </strong>
 
-                  <div className="flex items-center gap-1.5">
+                  <div className="flex items-center gap-1 sm:gap-1 lg:gap-1.5">
                     {[1, 2, 3, 4].map((level) => (
                       <motion.div
                         key={level}
@@ -230,7 +233,8 @@ export default function ScoreboardPage({
                           damping: 22,
                         }}
                         className={cn(
-                          "text-center py-1.5 px-5 rounded-lg font-bold text-sm transition-colors duration-300",
+                          "text-center rounded-lg font-bold transition-colors duration-300",
+                          "py-0.5 px-2 text-[0.6rem] sm:py-1 sm:px-3 sm:text-xs md:text-xs lg:py-1.5 lg:px-4 lg:text-sm 2xl:px-5",
                           liveMatch.akaChui >= level
                             ? "bg-yellow-400 text-black"
                             : "bg-muted text-muted-foreground",
@@ -245,7 +249,8 @@ export default function ScoreboardPage({
                 {/* AKA score box */}
                 <div
                   className={cn(
-                    "relative size-[200px] bg-red-500 text-white rounded-xl flex items-center justify-center shadow-xl overflow-hidden transition-all duration-300",
+                    "relative bg-red-500 text-white rounded-xl flex items-center justify-center shadow-xl overflow-hidden transition-all duration-300 flex-shrink-0",
+                    "size-20 sm:size-28 md:size-36 lg:size-44 xl:size-52 2xl:size-[18rem]",
                     pulseSide === "aka" && "scale-105",
                   )}
                 >
@@ -260,7 +265,7 @@ export default function ScoreboardPage({
                         stiffness: 350,
                         damping: 28,
                       }}
-                      className="font-bold font-mono text-9xl text-center"
+                      className="font-bold font-mono text-center text-5xl sm:text-6xl md:text-7xl lg:text-8xl xl:text-9xl 2xl:text-[10rem]"
                     >
                       {liveMatch.akaScore}
                     </motion.span>
@@ -277,7 +282,15 @@ export default function ScoreboardPage({
                           stiffness: 500,
                           damping: 22,
                         }}
-                        className="bg-green-600 flex items-end p-3 text-5xl font-bold h-[120px] w-[120px] text-white absolute bottom-0 left-0 rounded-bl-xl [clip-path:polygon(0%_0%,0%_100%,100%_100%)]"
+                        className={cn(
+                          "bg-green-600 flex items-end font-bold text-white absolute bottom-0 left-0 rounded-bl-xl [clip-path:polygon(0%_0%,0%_100%,100%_100%)]",
+                          "p-1.5 h-12 w-12 text-2xl",
+                          "sm:p-2 sm:h-[4.2rem] sm:w-[4.2rem] sm:text-3xl",
+                          "md:h-[5.4rem] md:w-[5.4rem]",
+                          "lg:p-2.5 lg:h-[6.6rem] lg:w-[6.6rem] lg:text-4xl",
+                          "xl:h-[7.8rem] xl:w-[7.8rem] xl:text-5xl",
+                          "2xl:p-3 2xl:h-[10.8rem] 2xl:w-[10.8rem] 2xl:text-6xl",
+                        )}
                       >
                         S
                       </motion.div>
@@ -289,7 +302,7 @@ export default function ScoreboardPage({
               {/* AO */}
               <section
                 className={cn(
-                  "grid grid-cols-[200px_auto] gap-4 border-2 p-6 rounded-2xl bg-card shadow-2xl transition-all duration-300",
+                  "grid grid-cols-[auto_1fr] gap-3 sm:gap-3 lg:gap-4 border-2 p-3 sm:p-4 lg:p-5 2xl:p-7 rounded-2xl bg-card shadow-2xl transition-all duration-300",
                   pulseSide === "ao"
                     ? "border-blue-500 ring-4 ring-blue-400/60 ring-offset-2"
                     : "border-blue-500/50",
@@ -298,7 +311,8 @@ export default function ScoreboardPage({
                 {/* AO score box */}
                 <div
                   className={cn(
-                    "relative size-[200px] bg-blue-500 text-white rounded-xl flex items-center justify-center shadow-xl overflow-hidden transition-all duration-300",
+                    "relative bg-blue-500 text-white rounded-xl flex items-center justify-center shadow-xl overflow-hidden transition-all duration-300 flex-shrink-0",
+                    "size-20 sm:size-28 md:size-36 lg:size-44 xl:size-52 2xl:size-[18rem]",
                     pulseSide === "ao" && "scale-105",
                   )}
                 >
@@ -313,7 +327,7 @@ export default function ScoreboardPage({
                         stiffness: 350,
                         damping: 28,
                       }}
-                      className="font-bold font-mono text-9xl text-center"
+                      className="font-bold font-mono text-center text-5xl sm:text-6xl md:text-7xl lg:text-8xl xl:text-9xl 2xl:text-[10rem]"
                     >
                       {liveMatch.aoScore}
                     </motion.span>
@@ -330,7 +344,15 @@ export default function ScoreboardPage({
                           stiffness: 500,
                           damping: 22,
                         }}
-                        className="bg-green-600 flex items-end justify-end p-3 text-5xl font-bold h-[120px] w-[120px] text-white absolute bottom-0 right-0 rounded-br-xl [clip-path:polygon(0%_100%,100%_0%,100%_100%)]"
+                        className={cn(
+                          "bg-green-600 flex items-end justify-end font-bold text-white absolute bottom-0 right-0 rounded-br-xl [clip-path:polygon(0%_100%,100%_0%,100%_100%)]",
+                          "p-1.5 h-12 w-12 text-2xl",
+                          "sm:p-2 sm:h-[4.2rem] sm:w-[4.2rem] sm:text-3xl",
+                          "md:h-[5.4rem] md:w-[5.4rem]",
+                          "lg:p-2.5 lg:h-[6.6rem] lg:w-[6.6rem] lg:text-4xl",
+                          "xl:h-[7.8rem] xl:w-[7.8rem] xl:text-5xl",
+                          "2xl:p-3 2xl:h-[10.8rem] 2xl:w-[10.8rem] 2xl:text-6xl",
+                        )}
                       >
                         S
                       </motion.div>
@@ -338,16 +360,16 @@ export default function ScoreboardPage({
                   </AnimatePresence>
                 </div>
 
-                <div className="flex flex-col justify-between gap-3 text-right">
-                  <p className="text-sm font-medium text-muted-foreground tracking-wide uppercase leading-tight">
+                <div className="flex flex-col justify-between gap-2 sm:gap-2 lg:gap-3 text-right min-w-0">
+                  <p className="font-medium text-muted-foreground tracking-wide uppercase leading-tight truncate text-[0.6rem] sm:text-xs md:text-xs lg:text-sm">
                     {liveMatch.aoSchool}
                   </p>
 
-                  <strong className="text-5xl leading-tight line-clamp-2">
+                  <strong className="leading-tight line-clamp-2 text-xl sm:text-2xl md:text-3xl lg:text-4xl xl:text-5xl">
                     {liveMatch.aoName}
                   </strong>
 
-                  <div className="flex items-center justify-end gap-1.5">
+                  <div className="flex items-center justify-end gap-1 sm:gap-1 lg:gap-1.5">
                     {[1, 2, 3, 4].map((level) => (
                       <motion.div
                         key={level}
@@ -360,7 +382,8 @@ export default function ScoreboardPage({
                           damping: 22,
                         }}
                         className={cn(
-                          "text-center py-1.5 px-5 rounded-lg font-bold text-sm transition-colors duration-300",
+                          "text-center rounded-lg font-bold transition-colors duration-300",
+                          "py-0.5 px-2 text-[0.6rem] sm:py-1 sm:px-3 sm:text-xs md:text-xs lg:py-1.5 lg:px-4 lg:text-sm 2xl:px-5",
                           liveMatch.aoChui >= level
                             ? "bg-yellow-400 text-black"
                             : "bg-muted text-muted-foreground",
@@ -375,9 +398,9 @@ export default function ScoreboardPage({
             </div>
 
             {/* Footer */}
-            <footer className="px-4 max-w-6xl w-full">
-              <div className="grid grid-cols-3 items-center text-center gap-8">
-                <p className="font-medium text-2xl text-muted-foreground leading-tight">
+            <footer className="w-full px-1 sm:px-2">
+              <div className="grid grid-cols-3 items-center text-center gap-2 sm:gap-4 lg:gap-8">
+                <p className="font-medium text-muted-foreground leading-tight truncate text-xs sm:text-base md:text-lg lg:text-2xl">
                   {liveMatch.category}
                 </p>
 
@@ -400,13 +423,13 @@ export default function ScoreboardPage({
                     repeat: localTime === 0 ? Infinity : 0,
                   }}
                 >
-                  <span className="font-semibold font-mono text-8xl tabular-nums">
+                  <span className="font-semibold font-mono tabular-nums text-3xl sm:text-5xl md:text-6xl lg:text-7xl xl:text-8xl 2xl:text-[9rem]">
                     {String(minutes).padStart(2, "0")}:
                     {String(seconds).padStart(2, "0")}
                   </span>
                 </motion.div>
 
-                <p className="font-bold text-3xl uppercase tracking-widest">
+                <p className="font-bold uppercase tracking-widest text-xs sm:text-lg md:text-xl lg:text-2xl xl:text-3xl">
                   {getMatchTypeLabel(liveMatch)}
                 </p>
               </div>

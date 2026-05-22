@@ -118,6 +118,8 @@ export default function RefereePage({
 
   // Tracks the winner being announced so broadcastState includes it
   const announcedWinnerRef = useRef<"aka" | "ao" | null>(null);
+  const broadcastDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const broadcastAbortRef = useRef<AbortController | null>(null);
 
   useHotkeys(
     "space",
@@ -167,10 +169,10 @@ export default function RefereePage({
     return () => clearInterval(interval);
   }, [liveState.timerRunning, liveState.timeRemaining]);
 
-  // Broadcast immediately on score/penalty/senshu/timer-control changes
+  // Debounced broadcast on score/penalty/senshu/timer-control changes
   useEffect(() => {
     if (!currentMatch?.aka || !currentMatch?.ao || !bracket) return;
-    broadcastState();
+    scheduleBroadcast();
   }, [
     liveState.akaScore,
     liveState.aoScore,
@@ -251,9 +253,19 @@ export default function RefereePage({
     if (!currentMatch || !currentMatch.aka || !currentMatch.ao || !bracket)
       return;
 
+    // Cancel any pending debounced call and any in-flight request
+    if (broadcastDebounceRef.current) {
+      clearTimeout(broadcastDebounceRef.current);
+      broadcastDebounceRef.current = null;
+    }
+    broadcastAbortRef.current?.abort();
+    const controller = new AbortController();
+    broadcastAbortRef.current = controller;
+
     try {
       await fetch(`/api/live-match`, {
         method: "POST",
+        signal: controller.signal,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           tournamentId: resolvedParams!.tournamentId,
@@ -274,8 +286,14 @@ export default function RefereePage({
         }),
       });
     } catch (error) {
+      if ((error as Error).name === "AbortError") return;
       console.error("Erro ao broadcast:", error);
     }
+  }
+
+  function scheduleBroadcast() {
+    if (broadcastDebounceRef.current) clearTimeout(broadcastDebounceRef.current);
+    broadcastDebounceRef.current = setTimeout(broadcastState, 200);
   }
 
   async function saveResult() {
@@ -325,17 +343,6 @@ export default function RefereePage({
 
       // Load next match (triggers broadcast with winner=null via Effect A)
       await loadData();
-
-      const hasMoreMatches = allMatches.some(
-        (m) => !m.isCompleted && m.id !== currentMatch.id,
-      );
-
-      if (!hasMoreMatches) {
-        await fetch(
-          `/api/live-match?tournamentId=${resolvedParams!.tournamentId}`,
-          { method: "DELETE" },
-        );
-      }
 
       toast.success("Resultado salvo!");
       resetState();
