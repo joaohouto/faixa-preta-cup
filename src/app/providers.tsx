@@ -1,7 +1,6 @@
 "use client";
 
 import { Toaster } from "@/components/ui/sonner";
-import { SessionProvider } from "next-auth/react";
 import { CommandPalette } from "@/hooks/use-commands";
 import { ThemeProvider } from "@/components/theme-provider";
 
@@ -12,11 +11,9 @@ export default function Providers({ children }: { children: React.ReactNode }) {
       defaultTheme="dark"
       disableTransitionOnChange
     >
-      <SessionProvider>
-        {children}
-        <Toaster />
-        <CommandPalette />
-      </SessionProvider>
+      {children}
+      <Toaster />
+      <CommandPalette />
     </ThemeProvider>
   );
 }

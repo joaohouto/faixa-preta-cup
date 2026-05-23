@@ -1,4 +1,3 @@
-import { auth } from "@/lib/auth";
 import { db } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 
@@ -7,23 +6,8 @@ export async function GET(
   context: { params: Promise<{ id: string; bracketId: string }> }
 ) {
   try {
-    const session = await auth();
-    if (!session?.user?.id) {
-      return new NextResponse("Unauthorized", { status: 401 });
-    }
+    const { bracketId } = await context.params;
 
-    const { id: tournamentId, bracketId } = await context.params;
-
-    // Verificar ownership
-    const tournament = await db.tournament.findUnique({
-      where: { id: tournamentId },
-    });
-
-    if (!tournament || tournament.organizerId !== session.user.id) {
-      return new NextResponse("Unauthorized", { status: 401 });
-    }
-
-    // Buscar próxima luta não completada
     const nextMatch = await db.match.findFirst({
       where: {
         bracketId,

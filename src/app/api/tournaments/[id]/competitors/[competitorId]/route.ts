@@ -1,4 +1,3 @@
-import { auth } from "@/lib/auth";
 import { db } from "@/lib/prisma";
 import {
   calculateAge,
@@ -12,12 +11,6 @@ export async function PUT(
   context: { params: Promise<{ id: string; competitorId: string }> }
 ) {
   try {
-    const session = await auth();
-
-    if (!session?.user?.id) {
-      return new NextResponse("Unauthorized", { status: 401 });
-    }
-
     const body = await req.json();
     const { competitorId } = await context.params;
 
@@ -61,24 +54,8 @@ export async function DELETE(
   context: { params: Promise<{ id: string; competitorId: string }> }
 ) {
   try {
-    const session = await auth();
-
-    if (!session?.user?.id) {
-      return new NextResponse("Unauthorized", { status: 401 });
-    }
-
     const { id: tournamentId, competitorId } = await context.params;
 
-    // Verificar ownership do torneio
-    const tournament = await db.tournament.findUnique({
-      where: { id: tournamentId },
-    });
-
-    if (!tournament || tournament.organizerId !== session.user.id) {
-      return new NextResponse("Unauthorized", { status: 401 });
-    }
-
-    // Verificar se competidor existe
     const competitor = await db.competitor.findUnique({
       where: { id: competitorId },
     });
@@ -87,7 +64,6 @@ export async function DELETE(
       return new NextResponse("Competitor not found", { status: 404 });
     }
 
-    // VERIFICAR SE COMPETIDOR ESTÁ EM ALGUMA CHAVE
     const matchesWithCompetitor = await db.match.findFirst({
       where: {
         OR: [{ akaId: competitorId }, { aoId: competitorId }],
@@ -101,14 +77,11 @@ export async function DELETE(
     });
 
     if (matchesWithCompetitor) {
-      // Se a chave ainda não iniciou, podemos regenerar
       if (matchesWithCompetitor.bracket.status === "NOT_STARTED") {
-        // Deletar o bracket inteiro para ser regenerado
         await db.bracket.delete({
           where: { id: matchesWithCompetitor.bracket.id },
         });
       } else {
-        // Se já iniciou, bloquear a exclusão
         return new NextResponse(
           "Não é possível excluir competidor que está em uma chave já iniciada. Categoria: " +
             matchesWithCompetitor.bracket.category,
@@ -117,7 +90,6 @@ export async function DELETE(
       }
     }
 
-    // Deletar competidor
     await db.competitor.delete({
       where: { id: competitorId },
     });

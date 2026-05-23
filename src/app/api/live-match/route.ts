@@ -1,15 +1,8 @@
-import { auth } from "@/lib/auth";
 import { db } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 
-// POST - Atualizar estado da luta ao vivo
 export async function POST(req: Request) {
   try {
-    const session = await auth();
-    if (!session?.user?.id) {
-      return new NextResponse("Unauthorized", { status: 401 });
-    }
-
     const body = await req.json();
     const {
       tournamentId,
@@ -37,17 +30,6 @@ export async function POST(req: Request) {
       winner,
     } = body;
 
-    // Verificar ownership — select mínimo, só o campo necessário
-    const tournament = await db.tournament.findUnique({
-      where: { id: tournamentId },
-      select: { organizerId: true },
-    });
-
-    if (!tournament || tournament.organizerId !== session.user.id) {
-      return new NextResponse("Unauthorized", { status: 401 });
-    }
-
-    // Upsert
     const matchData = {
       matchId,
       bracketId,
@@ -85,7 +67,7 @@ export async function POST(req: Request) {
     return new NextResponse("Internal Error", { status: 500 });
   }
 }
-// GET - Buscar luta ao vivo
+
 export async function GET(req: Request) {
   try {
     const { searchParams } = new URL(req.url);
@@ -110,29 +92,13 @@ export async function GET(req: Request) {
   }
 }
 
-// DELETE - Finalizar luta ao vivo
 export async function DELETE(req: Request) {
   try {
-    const session = await auth();
-    if (!session?.user?.id) {
-      return new NextResponse("Unauthorized", { status: 401 });
-    }
-
     const { searchParams } = new URL(req.url);
     const tournamentId = searchParams.get("tournamentId");
 
     if (!tournamentId) {
       return new NextResponse("Tournament ID required", { status: 400 });
-    }
-
-    // Verificar ownership — select mínimo, só o campo necessário
-    const tournament = await db.tournament.findUnique({
-      where: { id: tournamentId },
-      select: { organizerId: true },
-    });
-
-    if (!tournament || tournament.organizerId !== session.user.id) {
-      return new NextResponse("Unauthorized", { status: 401 });
     }
 
     await db.liveMatch.delete({

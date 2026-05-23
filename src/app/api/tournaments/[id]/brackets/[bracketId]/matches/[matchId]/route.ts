@@ -1,4 +1,3 @@
-import { auth } from "@/lib/auth";
 import { db } from "@/lib/prisma";
 import { Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
@@ -12,40 +11,23 @@ export async function PUT(
   }
 ) {
   try {
-    const session = await auth();
-    if (!session?.user?.id) {
-      return new NextResponse("Unauthorized", { status: 401 });
-    }
-
-    const { id: tournamentId, bracketId, matchId } = await context.params;
+    const { bracketId, matchId } = await context.params;
     const body = await req.json();
     const { akaScore, aoScore, winnerId, decisionByHantei } = body;
 
-    // Verificar ownership
-    const tournament = await db.tournament.findUnique({
-      where: { id: tournamentId },
-    });
-
-    if (!tournament || tournament.organizerId !== session.user.id) {
-      return new NextResponse("Unauthorized", { status: 401 });
-    }
-
-    // Buscar o match
     const match = await db.match.findUnique({
       where: { id: matchId },
       include: { bracket: true },
     });
 
-    if (!match || match.bracket.tournamentId !== tournamentId) {
+    if (!match) {
       return new NextResponse("Match not found", { status: 404 });
     }
 
-    // Validar vencedor
     if (winnerId !== match.akaId && winnerId !== match.aoId) {
       return new NextResponse("Invalid winner", { status: 400 });
     }
 
-    // Atualizar match
     const updatedMatch = await db.match.update({
       where: { id: matchId },
       data: {
@@ -58,7 +40,6 @@ export async function PUT(
       },
     });
 
-    // Atualizar status do bracket para IN_PROGRESS (se ainda não estiver)
     if (match.bracket.status === "NOT_STARTED") {
       await db.bracket.update({
         where: { id: bracketId },
@@ -66,10 +47,7 @@ export async function PUT(
       });
     }
 
-    // Propagar vencedor para próxima rodada
     await propagateWinner(match, winnerId);
-
-    // ✅ VERIFICAR SE TODAS AS LUTAS FORAM CONCLUÍDAS
     await checkAndCompleteBracket(bracketId);
 
     return NextResponse.json(updatedMatch);
@@ -82,14 +60,11 @@ export async function PUT(
 async function propagateWinner(match: MatchWithBracket, winnerId: string) {
   const { round, position, bracketId, bracket, akaId, aoId } = match;
 
-  // Determinar perdedor
   const loserId = winnerId === akaId ? aoId : akaId;
 
-  // Verificar se é semifinal
   const isSemiFinal = round === bracket.totalRounds - 1;
 
   if (isSemiFinal) {
-    // Propagar vencedor para final
     const nextRound = round + 1;
     const nextPosition = Math.floor(position / 2);
     const isAka = position % 2 === 0;
@@ -106,7 +81,6 @@ async function propagateWinner(match: MatchWithBracket, winnerId: string) {
       },
     });
 
-    // Propagar perdedor para 3º lugar
     const thirdPlaceMatch = await db.match.findFirst({
       where: {
         bracketId,
@@ -125,7 +99,6 @@ async function propagateWinner(match: MatchWithBracket, winnerId: string) {
       });
     }
   } else if (round < bracket.totalRounds && !match.isThirdPlace) {
-    // Rodada normal - propagar apenas vencedor
     const nextRound = round + 1;
     const nextPosition = Math.floor(position / 2);
     const isAka = position % 2 === 0;
@@ -144,14 +117,11 @@ async function propagateWinner(match: MatchWithBracket, winnerId: string) {
   }
 }
 
-// ✅ NOVA FUNÇÃO: Verificar e concluir bracket
 async function checkAndCompleteBracket(bracketId: string) {
-  // Buscar todas as lutas da chave
   const allMatches = await db.match.findMany({
     where: { bracketId },
   });
 
-  // Verificar se TODAS as lutas estão completas
   const allCompleted = allMatches.every((m) => m.isCompleted || m.isBye);
 
   if (allCompleted) {

@@ -1,4 +1,3 @@
-import { auth } from "@/lib/auth";
 import { db } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 import {
@@ -12,31 +11,15 @@ export async function POST(
   context: { params: Promise<{ id: string }> }
 ) {
   try {
-    const session = await auth();
-    if (!session?.user?.id) {
-      return new NextResponse("Unauthorized", { status: 401 });
-    }
-
     const { id: tournamentId } = await context.params;
     const body = await req.json();
     const { category, modality, generateAll } = body;
 
-    // Verificar ownership
-    const tournament = await db.tournament.findUnique({
-      where: { id: tournamentId },
-    });
-
-    if (!tournament || tournament.organizerId !== session.user.id) {
-      return new NextResponse("Unauthorized", { status: 401 });
-    }
-
-    // Gerar todas as chaves
     if (generateAll) {
       const competitors = await db.competitor.findMany({
         where: { tournamentId },
       });
 
-      // Agrupar por categoria Kata
       const kataGroups = new Map<string, typeof competitors>();
       competitors
         .filter((c) => c.kata && c.kataCategory)
@@ -46,7 +29,6 @@ export async function POST(
           kataGroups.get(cat)!.push(c);
         });
 
-      // Agrupar por categoria Kumite
       const kumiteGroups = new Map<string, typeof competitors>();
       competitors
         .filter((c) => c.kumite && c.kumiteCategory)
@@ -98,14 +80,12 @@ export async function POST(
       });
     }
 
-    // Gerar chave única
     if (!category || !modality) {
       return new NextResponse("Category and modality required", {
         status: 400,
       });
     }
 
-    // Verificar se já existe chave para esta categoria
     const existing = await db.bracket.findUnique({
       where: {
         tournamentId_category: { tournamentId, category },
@@ -120,11 +100,9 @@ export async function POST(
           { status: 400 }
         );
       }
-      // Deletar e recriar
       await db.bracket.delete({ where: { id: existing.id } });
     }
 
-    // Buscar competidores da categoria
     const field =
       modality === Modality.KATA ? "kataCategory" : "kumiteCategory";
     const competitors = await db.competitor.findMany({
@@ -154,7 +132,6 @@ export async function POST(
       competitors,
     });
 
-    // Propagar vencedores dos byes
     if (bracket) {
       await propagateByeWinners(bracket.id);
     }
@@ -171,21 +148,7 @@ export async function GET(
   context: { params: Promise<{ id: string }> }
 ) {
   try {
-    const session = await auth();
-    if (!session?.user?.id) {
-      return new NextResponse("Unauthorized", { status: 401 });
-    }
-
     const { id: tournamentId } = await context.params;
-
-    // Verificar ownership
-    const tournament = await db.tournament.findUnique({
-      where: { id: tournamentId },
-    });
-
-    if (!tournament || tournament.organizerId !== session.user.id) {
-      return new NextResponse("Unauthorized", { status: 401 });
-    }
 
     const brackets = await db.bracket.findMany({
       where: { tournamentId },

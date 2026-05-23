@@ -1,4 +1,3 @@
-import { auth } from "@/lib/auth";
 import { db } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 import { Competitor } from "@prisma/client";
@@ -41,19 +40,14 @@ export async function GET(
   context: { params: Promise<{ id: string }> }
 ) {
   try {
-    const session = await auth();
-    if (!session?.user?.id) {
-      return new NextResponse("Unauthorized", { status: 401 });
-    }
-
     const { id: tournamentId } = await context.params;
 
-    // Verifica ownership
     const tournament = await db.tournament.findUnique({
       where: { id: tournamentId },
     });
-    if (!tournament || tournament.organizerId !== session.user.id) {
-      return new NextResponse("Unauthorized", { status: 401 });
+
+    if (!tournament) {
+      return new NextResponse("Tournament not found", { status: 404 });
     }
 
     const competitors = await db.competitor.findMany({

@@ -35,7 +35,6 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { UserNav } from "./user-nav";
 import { FaixaPretaIcon } from "./icon/faixa-preta-icon";
 
 import { useEffect, useState } from "react";
@@ -215,10 +214,7 @@ export function Header({
         </div>
         {/* Right side */}
         <div className="flex items-center gap-2">
-          {/* Theme toggle */}
           <ThemeToggle />
-
-          <UserNav />
         </div>
       </div>
     </header>

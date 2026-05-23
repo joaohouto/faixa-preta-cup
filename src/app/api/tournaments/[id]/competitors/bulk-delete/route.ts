@@ -1,4 +1,3 @@
-import { auth } from "@/lib/auth";
 import { db } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 
@@ -7,24 +6,8 @@ export async function DELETE(
   context: { params: Promise<{ id: string }> }
 ) {
   try {
-    const session = await auth();
-
-    if (!session?.user?.id) {
-      return new NextResponse("Unauthorized", { status: 401 });
-    }
-
     const { id: tournamentId } = await context.params;
 
-    // Verificar ownership
-    const tournament = await db.tournament.findUnique({
-      where: { id: tournamentId },
-    });
-
-    if (!tournament || tournament.organizerId !== session.user.id) {
-      return new NextResponse("Unauthorized", { status: 401 });
-    }
-
-    // Verificar se há chaves já iniciadas
     const bracketsInProgress = await db.bracket.findFirst({
       where: {
         tournamentId,
@@ -41,7 +24,6 @@ export async function DELETE(
       );
     }
 
-    // Deletar todas as chaves não iniciadas
     await db.bracket.deleteMany({
       where: {
         tournamentId,
@@ -49,7 +31,6 @@ export async function DELETE(
       },
     });
 
-    // Deletar todos os competidores
     const result = await db.competitor.deleteMany({
       where: { tournamentId },
     });

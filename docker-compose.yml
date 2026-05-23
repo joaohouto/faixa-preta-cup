@@ -1,23 +1,11 @@
-version: "3.8"
-
 services:
-  mongodb:
-    image: mongo:latest
+  app:
+    build: .
     ports:
-      - "27017:27017"
-    environment:
-      MONGO_INITDB_ROOT_USERNAME: sensei
-      MONGO_INITDB_ROOT_PASSWORD: zanshin
-      MONGO_INITDB_DATABASE: faixa_preta_cup
-    container_name: mongodb_faixapreta_cup
+      - "3000:3000"
     volumes:
-      - mongo_data_faixapreta_cup:/data/db
-    restart: always
-    healthcheck:
-      test: ["CMD", "mongo", "--eval", "db.adminCommand('ping')"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+      - db_data:/data
+    restart: unless-stopped
 
 volumes:
-  mongo_data_faixapreta_cup:
+  db_data:

@@ -1,4 +1,3 @@
-import { auth } from "@/lib/auth";
 import { db as prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 
@@ -7,18 +6,10 @@ export async function GET(
   context: { params: Promise<{ id: string }> }
 ) {
   try {
-    const session = await auth();
-    if (!session?.user?.id) {
-      return new NextResponse("Unauthorized", { status: 401 });
-    }
-
     const { id: tournamentId } = await context.params;
 
     const tournament = await prisma.tournament.findFirst({
-      where: {
-        id: tournamentId,
-        organizerId: session.user.id,
-      },
+      where: { id: tournamentId },
     });
 
     if (!tournament) {
@@ -40,18 +31,10 @@ export async function PUT(
   context: { params: Promise<{ id: string }> }
 ) {
   try {
-    const session = await auth();
-    if (!session?.user?.id) {
-      return new NextResponse("Unauthorized", { status: 401 });
-    }
-
     const { id: tournamentId } = await context.params;
 
     const tournament = await prisma.tournament.findFirst({
-      where: {
-        id: tournamentId,
-        organizerId: session.user.id,
-      },
+      where: { id: tournamentId },
     });
 
     if (!tournament) {
@@ -84,18 +67,10 @@ export async function DELETE(
   context: { params: Promise<{ id: string }> }
 ) {
   try {
-    const session = await auth();
-    if (!session?.user?.id) {
-      return new NextResponse("Unauthorized", { status: 401 });
-    }
-
     const { id: tournamentId } = await context.params;
 
     const tournament = await prisma.tournament.findFirst({
-      where: {
-        id: tournamentId,
-        organizerId: session.user.id,
-      },
+      where: { id: tournamentId },
     });
 
     if (!tournament) {
@@ -105,7 +80,6 @@ export async function DELETE(
       );
     }
 
-    // Deleta o torneio (cascata deleta competitors e brackets)
     await prisma.tournament.delete({
       where: { id: tournamentId },
     });

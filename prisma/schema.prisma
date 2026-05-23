@@ -1,57 +1,10 @@
 datasource db {
-  provider = "mongodb"
+  provider = "sqlite"
   url      = env("DATABASE_URL")
 }
 
 generator client {
   provider = "prisma-client-js"
-}
-
-model Account {
-  id                String  @id @default(auto()) @map("_id") @db.ObjectId
-  userId            String  @db.ObjectId
-  type              String
-  provider          String
-  providerAccountId String
-  refresh_token     String? @db.String
-  access_token      String? @db.String
-  expires_at        Int?
-  token_type        String?
-  scope             String?
-  id_token          String? @db.String
-  session_state     String?
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@unique([provider, providerAccountId])
-}
-
-model Session {
-  id           String   @id @default(auto()) @map("_id") @db.ObjectId
-  sessionToken String   @unique
-  userId       String   @db.ObjectId
-  expires      DateTime
-  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-}
-
-model User {
-  id            String       @id @default(auto()) @map("_id") @db.ObjectId
-  name          String?
-  email         String?      @unique
-  emailVerified DateTime?
-  image         String?
-  accounts      Account[]
-  sessions      Session[]
-  tournaments   Tournament[]
-}
-
-model VerificationToken {
-  id         String   @id @default(auto()) @map("_id") @db.ObjectId
-  identifier String
-  token      String   @unique
-  expires    DateTime
-
-  @@unique([identifier, token])
 }
 
 enum Gender {
@@ -72,9 +25,9 @@ enum Belt {
 }
 
 enum BracketStatus {
-  NOT_STARTED // Chave gerada, sem resultados
-  IN_PROGRESS // Pelo menos uma luta registrada
-  COMPLETED // Todas lutas finalizadas
+  NOT_STARTED
+  IN_PROGRESS
+  COMPLETED
 }
 
 enum Modality {
@@ -83,19 +36,15 @@ enum Modality {
 }
 
 model Tournament {
-  id          String       @id @default(auto()) @map("_id") @db.ObjectId
+  id          String       @id @default(cuid())
   name        String
   createdAt   DateTime     @default(now())
-  organizerId String       @db.ObjectId
-  organizer   User         @relation(fields: [organizerId], references: [id])
   competitors Competitor[]
   Bracket     Bracket[]
-
-  @@index([organizerId])
 }
 
 model Competitor {
-  id             String     @id @default(auto()) @map("_id") @db.ObjectId
+  id             String     @id @default(cuid())
   name           String
   gender         Gender
   weight         Float?
@@ -104,7 +53,7 @@ model Competitor {
   school         String
   kata           Boolean    @default(false)
   kumite         Boolean    @default(false)
-  tournamentId   String     @db.ObjectId
+  tournamentId   String
   tournament     Tournament @relation(fields: [tournamentId], references: [id])
   age            Int
   kataCategory   String?
@@ -115,26 +64,21 @@ model Competitor {
 }
 
 model Bracket {
-  id           String     @id @default(auto()) @map("_id") @db.ObjectId
-  tournamentId String     @db.ObjectId
+  id           String     @id @default(cuid())
+  tournamentId String
   tournament   Tournament @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
 
-  // Categoria e Modalidade
-  category String // Ex: "KUMITE MALE SENIOR ADVANCED -75kg"
-  modality Modality // KATA ou KUMITE
+  category String
+  modality Modality
 
-  // Estrutura da Chave
-  totalSlots  Int // 2, 4, 8, 16, 32... (potência de 2)
-  totalRounds Int // log2(totalSlots)
+  totalSlots  Int
+  totalRounds Int
 
-  // Controle
   status BracketStatus @default(NOT_STARTED)
 
-  // Timestamps
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  // Relações
   matches Match[]
 
   @@unique([tournamentId, category])
@@ -144,34 +88,27 @@ model Bracket {
 }
 
 model Match {
-  id        String  @id @default(auto()) @map("_id") @db.ObjectId
-  bracketId String  @db.ObjectId
+  id        String  @id @default(cuid())
+  bracketId String
   bracket   Bracket @relation(fields: [bracketId], references: [id], onDelete: Cascade)
 
-  // Posição na Chave
-  round    Int // 1 (primeira rodada), 2, 3, ... até final
-  position Int // Posição dentro da rodada (0, 1, 2, ...)
+  round    Int
+  position Int
 
-  // Competidores (terminologia do karatê)
-  akaId String? @db.ObjectId // Competidor vermelho (Aka)
-  aoId  String? @db.ObjectId // Competidor azul (Ao)
+  akaId String?
+  aoId  String?
 
-  // Resultado
-  winnerId String? @db.ObjectId
+  winnerId String?
 
-  // Placar
   akaScore Int? @default(0)
   aoScore  Int? @default(0)
 
-  // Kumite: empate no placar resolve por Hantei (decisão dos árbitros)
   decisionByHantei Boolean @default(false)
 
-  // Tipos Especiais de Luta
-  isBye         Boolean @default(false) // Um competidor avança automaticamente
-  isThirdPlace  Boolean @default(false) // Disputa de 3º lugar
-  isFourthPlace Boolean @default(false) // Disputa de 4º lugar (opcional)
+  isBye         Boolean @default(false)
+  isThirdPlace  Boolean @default(false)
+  isFourthPlace Boolean @default(false)
 
-  // Controle
   isCompleted Boolean   @default(false)
   completedAt DateTime?
   createdAt   DateTime  @default(now())
@@ -183,27 +120,24 @@ model Match {
 }
 
 model LiveMatch {
-  id           String @id @default(auto()) @map("_id") @db.ObjectId
-  tournamentId String @unique @db.ObjectId // ← ÚNICO por torneio
-  matchId      String @db.ObjectId
-  bracketId    String @db.ObjectId
+  id           String @id @default(cuid())
+  tournamentId String @unique
+  matchId      String
+  bracketId    String
 
-  // Dados dos competidores (desnormalizado para performance)
-  akaId     String @db.ObjectId
+  akaId     String
   akaName   String
   akaSchool String
-  aoId      String @db.ObjectId
+  aoId      String
   aoName    String
   aoSchool  String
 
-  // Categoria
   category    String
   modality    String
   round       Int
   position    Int
-  totalRounds Int    @default(4) // Total de rodadas do bracket
+  totalRounds Int    @default(4)
 
-  // Estado atual da luta
   akaScore  Int     @default(0)
   aoScore   Int     @default(0)
   akaChui   Int     @default(0)
@@ -211,14 +145,11 @@ model LiveMatch {
   akaSenshu Boolean @default(false)
   aoSenshu  Boolean @default(false)
 
-  // Timer
   timeRemaining Int     @default(120)
   timerRunning  Boolean @default(false)
 
-  // Vencedor anunciado (aka | ao | null)
   winner String?
 
-  // Controle
   isActive  Boolean  @default(true)
   startedAt DateTime @default(now())
   updatedAt DateTime @updatedAt
