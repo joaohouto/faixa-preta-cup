@@ -32,7 +32,11 @@ export async function GET(
         if (finalMatch.akaId) competitorIds.add(finalMatch.akaId);
         if (finalMatch.aoId) competitorIds.add(finalMatch.aoId);
       }
-      if (thirdPlaceMatch?.winnerId) competitorIds.add(thirdPlaceMatch.winnerId);
+      if (thirdPlaceMatch) {
+        if (thirdPlaceMatch.winnerId) competitorIds.add(thirdPlaceMatch.winnerId);
+        if (thirdPlaceMatch.akaId) competitorIds.add(thirdPlaceMatch.akaId);
+        if (thirdPlaceMatch.aoId) competitorIds.add(thirdPlaceMatch.aoId);
+      }
     }
 
     // Fetch competitors in one query
@@ -71,6 +75,14 @@ export async function GET(
           ? competitorsMap.get(thirdPlaceMatch.winnerId)
           : undefined;
 
+      const fourthId =
+        thirdPlaceMatch?.isCompleted && thirdPlaceMatch.winnerId
+          ? thirdPlaceMatch.winnerId === thirdPlaceMatch.akaId
+            ? thirdPlaceMatch.aoId
+            : thirdPlaceMatch.akaId
+          : undefined;
+      const fourth = fourthId ? competitorsMap.get(fourthId) : undefined;
+
       return {
         bracketId: bracket.id,
         category: bracket.category,
@@ -80,6 +92,7 @@ export async function GET(
           first: first ?? null,
           second: second ?? null,
           third: third ?? null,
+          fourth: fourth ?? null,
         },
       };
     });

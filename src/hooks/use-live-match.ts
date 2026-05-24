@@ -17,6 +17,7 @@ type LiveMatch = {
   category: string;
   modality: string;
   round: number;
+  position: number;
   totalRounds: number;
   timeRemaining: number;
   timerRunning: boolean;

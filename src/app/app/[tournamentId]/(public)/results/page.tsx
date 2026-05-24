@@ -1,11 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useParams } from "next/navigation";
+import { use, useEffect, useState, useCallback } from "react";
 import { Header } from "@/components/header";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
-import { Trophy, Medal, Award, Clock, Loader2 } from "lucide-react";
+import { Trophy, Medal, Award, Clock, Loader2, Printer, RefreshCw } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 
 type Competitor = {
   id: string;
@@ -22,28 +22,57 @@ type CategoryResult = {
     first: Competitor | null;
     second: Competitor | null;
     third: Competitor | null;
+    fourth: Competitor | null;
   };
 };
+
+function formatTime(date: Date): string {
+  return date.toLocaleTimeString("pt-BR", {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  });
+}
 
 export default function ResultsPage({
   params,
 }: {
   params: Promise<{ tournamentId: string }>;
 }) {
-  const routeParams = useParams();
-  const tournamentId = routeParams?.tournamentId as string | undefined;
+  const { tournamentId } = use(params);
 
   const [results, setResults] = useState<CategoryResult[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [lastFetchAt, setLastFetchAt] = useState<Date | null>(null);
+
+  const fetchResults = useCallback(
+    async (isManual = false) => {
+      if (isManual) setRefreshing(true);
+      try {
+        const r = await fetch(`/api/tournaments/${tournamentId}/results`);
+        const data = await r.json();
+        setResults(data);
+        setLastFetchAt(new Date());
+      } catch {
+        // silently fail on refresh
+      } finally {
+        setLoading(false);
+        setRefreshing(false);
+      }
+    },
+    [tournamentId],
+  );
 
   useEffect(() => {
-    if (!tournamentId) return;
-    fetch(`/api/tournaments/${tournamentId}/results`)
-      .then((r) => r.json())
-      .then(setResults)
-      .catch(console.error)
-      .finally(() => setLoading(false));
-  }, [tournamentId]);
+    fetchResults();
+  }, [fetchResults]);
+
+  // Auto-refresh every 60s
+  useEffect(() => {
+    const interval = setInterval(() => fetchResults(), 60_000);
+    return () => clearInterval(interval);
+  }, [fetchResults]);
 
   const kataResults = results.filter((r) => r.modality === "KATA");
   const kumiteResults = results.filter((r) => r.modality === "KUMITE");
@@ -53,15 +82,48 @@ export default function ResultsPage({
       <Header currentTournamentId={tournamentId} />
 
       <main className="flex-1">
-        <div className="container mx-auto p-6">
-          {/* Header */}
-          <div className="mb-6 print:mb-4">
-            <h1 className="text-3xl font-bold mb-2 print:text-2xl">
-              Resultados
-            </h1>
-            <p className="text-muted-foreground print:hidden">
-              Classificação final por categoria
-            </p>
+        <div className="container mx-auto p-6 print:p-4">
+          {/* Page header */}
+          <div className="mb-8 flex items-start justify-between gap-4 print:mb-6">
+            <div>
+              <h1 className="text-3xl font-bold print:text-2xl">Resultados</h1>
+              <p className="text-sm text-muted-foreground mt-1 print:hidden">
+                Classificação final por categoria
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2 print:hidden">
+              {/* Last updated */}
+              {lastFetchAt && (
+                <span className="text-xs text-muted-foreground flex items-center gap-1.5">
+                  <RefreshCw
+                    className={cn("size-3", refreshing && "animate-spin")}
+                  />
+                  Atualizado às {formatTime(lastFetchAt)}
+                </span>
+              )}
+
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => fetchResults(true)}
+                disabled={refreshing}
+                className="gap-1.5"
+              >
+                <RefreshCw className={cn("size-3.5", refreshing && "animate-spin")} />
+                Atualizar
+              </Button>
+
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => window.print()}
+                className="gap-1.5"
+              >
+                <Printer className="size-3.5" />
+                Imprimir
+              </Button>
+            </div>
           </div>
 
           {loading ? (
@@ -72,38 +134,24 @@ export default function ResultsPage({
           ) : results.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-24 gap-3 text-muted-foreground">
               <Trophy className="size-12 opacity-20" />
-              <p className="text-lg font-medium">
-                Nenhuma categoria encontrada
-              </p>
+              <p className="text-lg font-medium">Nenhuma categoria encontrada</p>
               <p className="text-sm">Gere as chaves para ver os resultados.</p>
             </div>
           ) : (
-            <>
-              <Tabs defaultValue="kumite" className="w-full">
-                <TabsList className="grid w-full grid-cols-2 max-w-md mb-6 print:hidden">
-                  <TabsTrigger value="kata">
-                    Kata ({kataResults.length})
-                  </TabsTrigger>
-                  <TabsTrigger value="kumite">
-                    Kumite ({kumiteResults.length})
-                  </TabsTrigger>
-                </TabsList>
-
-                <TabsContent value="kumite" className="print:block">
-                  <ResultsGrid results={kumiteResults} />
-                </TabsContent>
-
-                <TabsContent value="kata" className="print:block">
-                  {/* Print-only section title */}
-                  <div className="hidden print:block mb-4 mt-8 border-t pt-6">
-                    <h2 className="text-base font-semibold uppercase tracking-widest text-muted-foreground">
-                      Kata
-                    </h2>
-                  </div>
-                  <ResultsGrid results={kataResults} />
-                </TabsContent>
-              </Tabs>
-            </>
+            <div className="space-y-10 print:space-y-8">
+              {kumiteResults.length > 0 && (
+                <ResultsSection
+                  title="Kumite"
+                  results={kumiteResults}
+                />
+              )}
+              {kataResults.length > 0 && (
+                <ResultsSection
+                  title="Kata"
+                  results={kataResults}
+                />
+              )}
+            </div>
           )}
         </div>
       </main>
@@ -111,64 +159,80 @@ export default function ResultsPage({
   );
 }
 
-function ResultsGrid({ results }: { results: CategoryResult[] }) {
-  if (results.length === 0) {
-    return (
-      <div className="flex flex-col items-center justify-center py-16 gap-3 text-muted-foreground">
-        <Trophy className="size-10 opacity-20" />
-        <p className="text-base font-medium">
-          Nenhuma categoria nesta modalidade
-        </p>
-      </div>
-    );
-  }
+function ResultsSection({
+  title,
+  results,
+}: {
+  title: string;
+  results: CategoryResult[];
+}) {
+  const completed = results.filter((r) => r.status === "COMPLETED").length;
+  const inProgress = results.filter((r) => r.status === "IN_PROGRESS").length;
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 print:grid-cols-1 print:gap-3">
-      {results.map((result) => (
-        <CategoryResultCard key={result.bracketId} result={result} />
-      ))}
-    </div>
+    <section className="print:break-before-avoid">
+      {/* Section header */}
+      <div className="flex items-center gap-3 mb-4 print:mb-3">
+        <h2 className="text-lg font-semibold tracking-tight">{title}</h2>
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-muted-foreground">
+            {results.length} {results.length === 1 ? "categoria" : "categorias"}
+          </span>
+          {completed > 0 && (
+            <Badge
+              variant="outline"
+              className="text-[10px] h-5 border-green-500/40 bg-green-500/10 text-green-600 dark:text-green-400 print:hidden"
+            >
+              {completed} concluída{completed > 1 ? "s" : ""}
+            </Badge>
+          )}
+          {inProgress > 0 && (
+            <Badge
+              variant="outline"
+              className="text-[10px] h-5 border-blue-500/40 bg-blue-500/10 text-blue-600 dark:text-blue-400 print:hidden"
+            >
+              {inProgress} em andamento
+            </Badge>
+          )}
+        </div>
+        <div className="flex-1 h-px bg-border" />
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 print:grid-cols-2 print:gap-2">
+        {results.map((result) => (
+          <CategoryResultCard key={result.bracketId} result={result} />
+        ))}
+      </div>
+    </section>
   );
 }
 
 function CategoryResultCard({ result }: { result: CategoryResult }) {
-  const hasAnyResult =
-    result.podium.first || result.podium.second || result.podium.third;
+  const { podium, status } = result;
+  const hasAnyResult = podium.first || podium.second || podium.third;
 
   return (
-    <div className="rounded-xl border bg-card shadow-sm overflow-hidden print:break-inside-avoid print:shadow-none">
+    <div className="rounded-xl border bg-card shadow-sm overflow-hidden print:break-inside-avoid print:shadow-none print:rounded-lg">
       {/* Card header */}
-      <div className="flex items-center justify-between gap-2 px-4 py-3 border-b bg-muted/30 print:bg-transparent">
-        <span className="font-mono font-semibold text-sm">
+      <div className="flex items-center justify-between gap-2 px-4 py-2.5 border-b bg-muted/30 print:bg-transparent">
+        <span className="font-mono font-semibold text-sm leading-tight">
           {result.category}
         </span>
-        {/* <StatusDot status={result.status} /> */}
+        <StatusDot status={status} />
       </div>
 
       {/* Podium */}
       <div className="divide-y">
         {hasAnyResult ? (
           <>
-            {result.podium.first && (
-              <PodiumRow place={1} competitor={result.podium.first} />
-            )}
-            {result.podium.second && (
-              <PodiumRow place={2} competitor={result.podium.second} />
-            )}
-            {result.podium.third && (
-              <PodiumRow place={3} competitor={result.podium.third} />
-            )}
-            {result.status === "IN_PROGRESS" && (
-              <div className="px-4 py-2 flex items-center gap-1.5 text-xs text-muted-foreground/60 print:hidden">
-                <Clock className="size-3 shrink-0" />
-                Parcial
-              </div>
-            )}
+            {podium.first && <PodiumRow place={1} competitor={podium.first} />}
+            {podium.second && <PodiumRow place={2} competitor={podium.second} />}
+            {podium.third && <PodiumRow place={3} competitor={podium.third} />}
+            {podium.fourth && <PodiumRow place={4} competitor={podium.fourth} />}
           </>
         ) : (
-          <div className="px-4 py-5 flex items-center gap-2.5 text-muted-foreground">
-            {result.status === "NOT_STARTED" ? (
+          <div className="px-4 py-4 flex items-center gap-2 text-muted-foreground">
+            {status === "NOT_STARTED" ? (
               <>
                 <Clock className="size-3.5 shrink-0 opacity-40" />
                 <span className="text-xs">Não iniciado</span>
@@ -202,7 +266,13 @@ const placeConfig = {
   3: {
     icon: Award,
     label: "3º",
-    iconClass: "text-amber-700/80",
+    iconClass: "text-amber-700/70",
+    rowClass: "",
+  },
+  4: {
+    icon: null,
+    label: "4º",
+    iconClass: "text-muted-foreground/40",
     rowClass: "",
   },
 } as const;
@@ -211,7 +281,7 @@ function PodiumRow({
   place,
   competitor,
 }: {
-  place: 1 | 2 | 3;
+  place: 1 | 2 | 3 | 4;
   competitor: Competitor;
 }) {
   const { icon: Icon, label, iconClass, rowClass } = placeConfig[place];
@@ -219,7 +289,11 @@ function PodiumRow({
   return (
     <div className={cn("flex items-center gap-3 px-4 py-2.5", rowClass)}>
       <div className={cn("flex items-center gap-1 w-8 shrink-0", iconClass)}>
-        <Icon className="size-3.5" />
+        {Icon ? (
+          <Icon className="size-3.5 shrink-0" />
+        ) : (
+          <span className="size-3.5 shrink-0" />
+        )}
         <span className="text-xs font-bold tabular-nums">{label}</span>
       </div>
       <div className="flex-1 min-w-0">
@@ -234,20 +308,15 @@ function PodiumRow({
   );
 }
 
-/** Minimal status indicator — just a small dot with muted text */
 function StatusDot({ status }: { status: CategoryResult["status"] }) {
   if (status === "NOT_STARTED") return null;
 
   return (
-    <span
-      className={cn(
-        "inline-flex items-center gap-1 text-[10px] font-medium text-muted-foreground/60 shrink-0 print:hidden",
-      )}
-    >
+    <span className="inline-flex items-center gap-1 text-[10px] font-medium text-muted-foreground/60 shrink-0 print:hidden">
       <span
         className={cn(
           "size-1.5 rounded-full",
-          status === "IN_PROGRESS" && "bg-blue-400",
+          status === "IN_PROGRESS" && "bg-blue-400 animate-pulse",
           status === "COMPLETED" && "bg-green-500",
         )}
       />

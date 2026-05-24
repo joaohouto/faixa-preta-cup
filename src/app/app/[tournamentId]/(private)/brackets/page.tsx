@@ -1,21 +1,16 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { use, useEffect, useState } from "react";
 import { Bracket, Competitor } from "@prisma/client";
 import { toast } from "sonner";
 import {
-  Users,
   Trophy,
-  ListFilter,
   Zap,
   Loader2,
-  Play,
   Trash2,
   Eye,
   CheckCircle2,
   Clock,
-  Flag,
-  HeartPulse,
   Activity,
   AlertTriangle,
 } from "lucide-react";
@@ -92,9 +87,7 @@ export default function BracketsPage({
 }: {
   params: Promise<{ tournamentId: string }>;
 }) {
-  const [resolvedParams, setResolvedParams] = useState<{
-    tournamentId: string;
-  } | null>(null);
+  const { tournamentId } = use(params);
 
   const [kataCategories, setKataCategories] = useState<CategoryGroup[]>([]);
   const [kumiteCategories, setKumiteCategories] = useState<CategoryGroup[]>([]);
@@ -106,21 +99,17 @@ export default function BracketsPage({
   const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null);
 
   useEffect(() => {
-    params.then((p) => setResolvedParams(p));
-  }, [params]);
-
-  useEffect(() => {
-    if (!resolvedParams) return;
     fetchData();
-  }, [resolvedParams]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   async function fetchData() {
     try {
       setLoading(true);
 
       const [categoriesRes, bracketsRes] = await Promise.all([
-        fetch(`/api/tournaments/${resolvedParams!.tournamentId}/categories`),
-        fetch(`/api/tournaments/${resolvedParams!.tournamentId}/brackets`),
+        fetch(`/api/tournaments/${tournamentId}/categories`),
+        fetch(`/api/tournaments/${tournamentId}/brackets`),
       ]);
 
       if (!categoriesRes.ok) throw new Error("Failed to fetch categories");
@@ -140,7 +129,7 @@ export default function BracketsPage({
   async function refreshBrackets() {
     try {
       const bracketsRes = await fetch(
-        `/api/tournaments/${resolvedParams!.tournamentId}/brackets`,
+        `/api/tournaments/${tournamentId}/brackets`,
       );
       if (!bracketsRes.ok) throw new Error("Failed to fetch brackets");
       const bracketsData: BracketWithCount[] = await bracketsRes.json();
@@ -198,7 +187,7 @@ export default function BracketsPage({
     setGeneratingAll(true);
     try {
       const res = await fetch(
-        `/api/tournaments/${resolvedParams!.tournamentId}/brackets`,
+        `/api/tournaments/${tournamentId}/brackets`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -226,7 +215,7 @@ export default function BracketsPage({
     setActionLoading(category);
     try {
       const res = await fetch(
-        `/api/tournaments/${resolvedParams!.tournamentId}/brackets`,
+        `/api/tournaments/${tournamentId}/brackets`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -263,7 +252,7 @@ export default function BracketsPage({
 
     try {
       const res = await fetch(
-        `/api/tournaments/${resolvedParams!.tournamentId}/brackets/${bracketId}`,
+        `/api/tournaments/${tournamentId}/brackets/${bracketId}`,
         { method: "DELETE" },
       );
 
@@ -318,70 +307,27 @@ export default function BracketsPage({
   return (
     <div className="container mx-auto p-6 print:p-0">
       {/* Header */}
-      <div className="mb-6">
-        <h1 className="text-3xl font-bold mb-2">Chaves e Categorias</h1>
-        <p className="text-muted-foreground print:hidden">
-          Gerencie categorias e suas chaves de competição
-        </p>
-      </div>
-
-      {/* Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6 print:hidden">
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Categorias
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="flex items-center gap-2">
-              <ListFilter className="h-5 w-5 text-muted-foreground" />
-              <span className="text-2xl font-bold">{totalCategories}</span>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Chaves Geradas
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="flex items-center gap-2">
-              <Trophy className="h-5 w-5 text-muted-foreground" />
-              <span className="text-2xl font-bold">{stats.totalBrackets}</span>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Em Andamento
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="flex items-center gap-2">
-              <Loader2 className="h-5 w-5 text-blue-600" />
-              <span className="text-2xl font-bold">{stats.inProgress}</span>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Concluídas
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="flex items-center gap-2">
-              <CheckCircle2 className="h-5 w-5 text-green-600" />
-              <span className="text-2xl font-bold">{stats.completed}</span>
-            </div>
-          </CardContent>
-        </Card>
+      <div className="mb-6 flex items-center justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-bold">Chaves e Categorias</h1>
+          <div className="flex items-center gap-3 mt-1.5 print:hidden">
+            <span className="text-sm text-muted-foreground">
+              {totalCategories} categorias · {stats.totalBrackets} chaves geradas
+            </span>
+            {stats.inProgress > 0 && (
+              <span className="inline-flex items-center gap-1 text-xs text-blue-600 dark:text-blue-400">
+                <span className="size-1.5 rounded-full bg-blue-400 animate-pulse" />
+                {stats.inProgress} em andamento
+              </span>
+            )}
+            {stats.completed > 0 && (
+              <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+                <CheckCircle2 className="size-3" />
+                {stats.completed} concluída{stats.completed !== 1 ? "s" : ""}
+              </span>
+            )}
+          </div>
+        </div>
       </div>
 
       {/* Generate All Button */}
@@ -442,7 +388,7 @@ export default function BracketsPage({
                   onGenerateBracket={handleGenerateSingle}
                   onDeleteBracket={handleDeleteBracketRequest}
                   isLoading={actionLoading === group.category}
-                  tournamentId={resolvedParams!.tournamentId}
+                  tournamentId={tournamentId}
                 />
               ))}
             </div>
@@ -477,7 +423,7 @@ export default function BracketsPage({
                   onGenerateBracket={handleGenerateSingle}
                   onDeleteBracket={handleDeleteBracketRequest}
                   isLoading={actionLoading === group.category}
-                  tournamentId={resolvedParams!.tournamentId}
+                  tournamentId={tournamentId}
                 />
               ))}
             </div>
@@ -640,18 +586,6 @@ function CategoryCard({
                     Ver Chave
                   </Button>
                 </Link>
-
-                {/* Painel de Árbitro (se não completada) */}
-                {group.bracket.status !== "COMPLETED" && (
-                  <Link
-                    href={`/app/${tournamentId}/brackets/${group.bracket.id}/referee`}
-                  >
-                    <Button size="sm">
-                      <Flag />
-                      Arbitrar
-                    </Button>
-                  </Link>
-                )}
 
                 {/* Deletar */}
                 <Button

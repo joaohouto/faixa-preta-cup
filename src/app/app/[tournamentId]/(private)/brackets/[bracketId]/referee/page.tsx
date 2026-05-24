@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { Suspense, use, useEffect, useState, useRef, useCallback } from "react";
 import { Match, Competitor, Bracket } from "@prisma/client";
 import { toast } from "sonner";
 import {
@@ -9,14 +9,14 @@ import {
   RotateCcw,
   Save,
   ArrowLeft,
-  CheckCircle,
   Loader2,
-  Trophy,
+  Presentation,
 } from "lucide-react";
 import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
 
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useHotkeys } from "react-hotkeys-hook";
 import { cn } from "@/lib/utils";
@@ -51,11 +51,24 @@ type LiveMatchState = {
   aoChui: number;
   akaSenshu: boolean;
   aoSenshu: boolean;
+  // -1 = sem tempo definido
   timeRemaining: number;
   timerRunning: boolean;
 };
 
+const INITIAL_STATE: LiveMatchState = {
+  akaScore: 0,
+  aoScore: 0,
+  akaChui: 0,
+  aoChui: 0,
+  akaSenshu: false,
+  aoSenshu: false,
+  timeRemaining: -1,
+  timerRunning: false,
+};
+
 const TIME_OPTIONS = [
+  { label: "--:--", value: -1 },
   { label: "1 minuto", value: 60 },
   { label: "1:30 minutos", value: 90 },
   { label: "2 minutos", value: 120 },
@@ -63,71 +76,93 @@ const TIME_OPTIONS = [
   { label: "3 minutos", value: 180 },
 ];
 
-// Função para determinar o tipo de luta
-const getMatchTypeLabel = (
+function getMatchTypeLabel(
   match: MatchWithCompetitors,
   bracket: Bracket | null,
-): { label: string; variant: "default" | "secondary" | "destructive" } => {
-  if (match.isThirdPlace) {
-    return { label: "3º LUGAR", variant: "destructive" };
-  }
-  if (match.isFourthPlace) {
-    return { label: "4º LUGAR", variant: "secondary" };
-  }
-  if (bracket && match.round === bracket.totalRounds) {
-    return { label: "FINAL", variant: "default" };
-  }
-  if (bracket && match.round === bracket.totalRounds - 1) {
-    return { label: "SEMIFINAL", variant: "secondary" };
-  }
-  return { label: "", variant: "secondary" };
-};
+): string {
+  if (!bracket) return "";
+  if (match.isThirdPlace) return "3º LUGAR";
+  if (match.isFourthPlace) return "4º LUGAR";
+  if (match.round === bracket.totalRounds) return "FINAL";
+  if (match.round === bracket.totalRounds - 1) return "SEMIFINAL";
+  return "";
+}
+
+// ── Outer page: Suspense boundary fixes useSearchParams hydration loop ───────
 
 export default function RefereePage({
   params,
 }: {
   params: Promise<{ tournamentId: string; bracketId: string }>;
 }) {
-  const [resolvedParams, setResolvedParams] = useState<{
-    tournamentId: string;
-    bracketId: string;
-  } | null>(null);
+  return (
+    <Suspense
+      fallback={
+        <div className="h-screen flex items-center justify-center">
+          <Spinner />
+        </div>
+      }
+    >
+      <RefereePageContent params={params} />
+    </Suspense>
+  );
+}
+
+// ── Inner page: full referee logic ───────────────────────────────────────────
+
+function RefereePageContent({
+  params,
+}: {
+  params: Promise<{ tournamentId: string; bracketId: string }>;
+}) {
+  const { tournamentId, bracketId } = use(params);
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const matchId = searchParams.get("matchId");
 
   const [currentMatch, setCurrentMatch] = useState<MatchWithCompetitors | null>(
     null,
   );
-  const [allMatches, setAllMatches] = useState<MatchWithCompetitors[]>([]);
   const [bracket, setBracket] = useState<Bracket | null>(null);
-  const [liveState, setLiveState] = useState<LiveMatchState>({
-    akaScore: 0,
-    aoScore: 0,
-    akaChui: 0,
-    aoChui: 0,
-    akaSenshu: false,
-    aoSenshu: false,
-    timeRemaining: 120,
-    timerRunning: false,
-  });
+  const [liveState, setLiveState] = useState<LiveMatchState>(INITIAL_STATE);
+  const [selectedDuration, setSelectedDuration] = useState(-1);
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-
-  const [selectedDuration, setSelectedDuration] = useState(120);
   const [showWinnerDialog, setShowWinnerDialog] = useState(false);
-  const [selectedWinner, setSelectedWinner] = useState<string | null>(null);
 
-  // Tracks the winner being announced so broadcastState includes it
+  // Refs for stable broadcast — reads latest values without stale closures
+  const liveStateRef = useRef(liveState);
+  const currentMatchRef = useRef(currentMatch);
+  const bracketRef = useRef(bracket);
+  const routeRef = useRef({ tournamentId, bracketId });
   const announcedWinnerRef = useRef<"aka" | "ao" | null>(null);
-  const broadcastDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const broadcastDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  );
   const broadcastAbortRef = useRef<AbortController | null>(null);
+  const lastTimerBroadcastRef = useRef(0);
+  const isNavigatingRef = useRef(false);
 
+  // Keep refs in sync
+  useEffect(() => {
+    liveStateRef.current = liveState;
+  }, [liveState]);
+  useEffect(() => {
+    currentMatchRef.current = currentMatch;
+  }, [currentMatch]);
+  useEffect(() => {
+    bracketRef.current = bracket;
+  }, [bracket]);
+
+  // Space = play/pause (only when there's a timer)
   useHotkeys(
     "space",
     () => {
-      setLiveState((prev) => ({
-        ...prev,
-        timerRunning: !prev.timerRunning,
-      }));
+      setLiveState((prev) => {
+        if (prev.timeRemaining < 0) return prev;
+        return { ...prev, timerRunning: !prev.timerRunning };
+      });
     },
     {
       preventDefault: true,
@@ -137,42 +172,42 @@ export default function RefereePage({
   );
 
   useEffect(() => {
-    params.then((p) => setResolvedParams(p));
-  }, [params]);
-
-  useEffect(() => {
-    if (!resolvedParams) return;
+    if (isNavigatingRef.current) return;
+    if (!matchId) {
+      router.replace(`/app/${tournamentId}/brackets/${bracketId}`);
+      return;
+    }
     loadData();
-  }, [resolvedParams]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [matchId]);
 
-  // Limpar live match ao sair da página
+  // Cleanup live match on unmount
   useEffect(() => {
     return () => {
-      if (resolvedParams?.tournamentId) {
-        fetch(`/api/live-match?tournamentId=${resolvedParams.tournamentId}`, {
-          method: "DELETE",
-        });
+      const { tournamentId: tid } = routeRef.current;
+      if (tid) {
+        fetch(`/api/live-match?tournamentId=${tid}`, { method: "DELETE" });
       }
     };
-  }, [resolvedParams]);
+  }, []);
 
+  // Timer countdown — only depends on timerRunning; functional update reads current value
   useEffect(() => {
-    if (!liveState.timerRunning || liveState.timeRemaining <= 0) return;
-
+    if (!liveState.timerRunning) return;
     const interval = setInterval(() => {
-      setLiveState((prev) => ({
-        ...prev,
-        timeRemaining: Math.max(0, prev.timeRemaining - 1),
-      }));
+      setLiveState((prev) => {
+        if (prev.timeRemaining <= 0) return { ...prev, timerRunning: false };
+        return { ...prev, timeRemaining: prev.timeRemaining - 1 };
+      });
     }, 1000);
-
     return () => clearInterval(interval);
-  }, [liveState.timerRunning, liveState.timeRemaining]);
+  }, [liveState.timerRunning]);
 
-  // Debounced broadcast on score/penalty/senshu/timer-control changes
+  // Broadcast on score/penalty/senshu/play-pause changes
   useEffect(() => {
-    if (!currentMatch?.aka || !currentMatch?.ao || !bracket) return;
+    if (!currentMatchRef.current?.aka || !currentMatchRef.current?.ao) return;
     scheduleBroadcast();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     liveState.akaScore,
     liveState.aoScore,
@@ -180,80 +215,28 @@ export default function RefereePage({
     liveState.aoChui,
     liveState.akaSenshu,
     liveState.aoSenshu,
-    liveState.timerRunning, // pause/resume must sync immediately
-    currentMatch,
+    liveState.timerRunning,
   ]);
 
   // Heartbeat: sync timer to DB at most every 10s during active countdown
-  // (scoreboard runs local timer, so per-second writes are wasteful)
-  const lastTimerBroadcastRef = useRef(0);
   useEffect(() => {
-    if (!currentMatch?.aka || !currentMatch?.ao || !bracket) return;
-    if (!liveState.timerRunning) return;
+    if (!liveState.timerRunning || liveState.timeRemaining <= 0) return;
     const now = Date.now();
     if (now - lastTimerBroadcastRef.current >= 10_000) {
       lastTimerBroadcastRef.current = now;
       broadcastState();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [liveState.timeRemaining]);
 
-  async function loadData() {
-    try {
-      setLoading(true);
+  // Stable broadcast — reads from refs, so never stale
+  const broadcastState = useCallback(async () => {
+    const match = currentMatchRef.current;
+    const br = bracketRef.current;
+    const state = liveStateRef.current;
+    const { tournamentId: tid, bracketId: bid } = routeRef.current;
+    if (!match?.aka || !match?.ao || !br || !tid) return;
 
-      // Buscar bracket
-      const bracketRes = await fetch(
-        `/api/tournaments/${resolvedParams!.tournamentId}/brackets/${
-          resolvedParams!.bracketId
-        }`,
-      );
-      const bracketData = await bracketRes.json();
-      setBracket(bracketData);
-
-      // Buscar competidores
-      const compRes = await fetch(
-        `/api/tournaments/${resolvedParams!.tournamentId}/competitors`,
-      );
-      const competitors: Competitor[] = await compRes.json();
-      const competitorsMap = new Map(competitors.map((c) => [c.id, c]));
-
-      // Mapear matches com competidores
-      const matchesWithComps: MatchWithCompetitors[] = bracketData.matches
-        .filter((m: Match) => !m.isBye && m.akaId && m.aoId)
-        .map((m: Match) => ({
-          ...m,
-          aka: m.akaId ? competitorsMap.get(m.akaId) : undefined,
-          ao: m.aoId ? competitorsMap.get(m.aoId) : undefined,
-          bracket: bracketData,
-        }));
-
-      setAllMatches(matchesWithComps);
-
-      // Buscar próxima luta
-      const nextMatch = matchesWithComps.find((m) => !m.isCompleted);
-      if (nextMatch) {
-        setCurrentMatch(nextMatch);
-      } else {
-        toast.info("Todas as lutas foram concluídas!");
-        // Limpar live match
-        await fetch(
-          `/api/live-match?tournamentId=${resolvedParams!.tournamentId}`,
-          { method: "DELETE" },
-        );
-        setCurrentMatch(null);
-      }
-    } catch (error) {
-      toast.error("Erro ao carregar dados");
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function broadcastState() {
-    if (!currentMatch || !currentMatch.aka || !currentMatch.ao || !bracket)
-      return;
-
-    // Cancel any pending debounced call and any in-flight request
     if (broadcastDebounceRef.current) {
       clearTimeout(broadcastDebounceRef.current);
       broadcastDebounceRef.current = null;
@@ -268,86 +251,150 @@ export default function RefereePage({
         signal: controller.signal,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          tournamentId: resolvedParams!.tournamentId,
-          matchId: currentMatch.id,
-          bracketId: resolvedParams!.bracketId,
-          akaId: currentMatch.akaId,
-          akaName: currentMatch.aka.name,
-          akaSchool: currentMatch.aka.school,
-          aoId: currentMatch.aoId,
-          aoName: currentMatch.ao.name,
-          aoSchool: currentMatch.ao.school,
-          category: bracket.category,
-          modality: bracket.modality,
-          round: currentMatch.round,
-          position: currentMatch.position,
-          ...liveState,
+          tournamentId: tid,
+          matchId: match.id,
+          bracketId: bid,
+          akaId: match.akaId,
+          akaName: match.aka.name,
+          akaSchool: match.aka.school,
+          aoId: match.aoId,
+          aoName: match.ao.name,
+          aoSchool: match.ao.school,
+          category: br.category,
+          modality: br.modality,
+          round: match.round,
+          position: match.position,
+          totalRounds: br.totalRounds,
+          ...state,
           winner: announcedWinnerRef.current,
         }),
       });
     } catch (error) {
       if ((error as Error).name === "AbortError") return;
-      console.error("Erro ao broadcast:", error);
     }
-  }
+  }, []);
 
   function scheduleBroadcast() {
-    if (broadcastDebounceRef.current) clearTimeout(broadcastDebounceRef.current);
+    if (broadcastDebounceRef.current)
+      clearTimeout(broadcastDebounceRef.current);
     broadcastDebounceRef.current = setTimeout(broadcastState, 200);
   }
 
-  async function saveResult() {
-    if (!currentMatch) return;
+  async function loadData() {
+    try {
+      setLoading(true);
+      const { tournamentId: tid, bracketId: bid } = routeRef.current;
 
-    // Se placar empate, perguntar vencedor
-    if (liveState.akaScore === liveState.aoScore) {
+      const [bracketRes, compRes] = await Promise.all([
+        fetch(`/api/tournaments/${tid}/brackets/${bid}`),
+        fetch(`/api/tournaments/${tid}/competitors`),
+      ]);
+
+      const bracketData = await bracketRes.json();
+      const competitors: Competitor[] = await compRes.json();
+      const competitorsMap = new Map(competitors.map((c) => [c.id, c]));
+
+      setBracket(bracketData);
+
+      const match = bracketData.matches.find((m: Match) => m.id === matchId);
+      if (!match) {
+        toast.error("Luta não encontrada");
+        goBack();
+        return;
+      }
+
+      const aka = match.akaId ? competitorsMap.get(match.akaId) : undefined;
+      const ao = match.aoId ? competitorsMap.get(match.aoId) : undefined;
+
+      setCurrentMatch({ ...match, aka, ao, bracket: bracketData });
+
+      // Broadcast imediato para o scoreboard mostrar os dados ao abrir
+      if (aka && ao) {
+        fetch(`/api/live-match`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            tournamentId: tid,
+            matchId: match.id,
+            bracketId: bid,
+            akaId: match.akaId,
+            akaName: aka.name,
+            akaSchool: aka.school,
+            aoId: match.aoId,
+            aoName: ao.name,
+            aoSchool: ao.school,
+            category: bracketData.category,
+            modality: bracketData.modality,
+            round: match.round,
+            position: match.position,
+            totalRounds: bracketData.totalRounds,
+            ...INITIAL_STATE,
+            winner: null,
+          }),
+        }).catch(() => {});
+      }
+    } catch {
+      toast.error("Erro ao carregar dados");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function goBack() {
+    isNavigatingRef.current = true;
+    router.back();
+  }
+
+  async function saveResult() {
+    if (!currentMatchRef.current) return;
+    const state = liveStateRef.current;
+
+    if (state.akaScore === state.aoScore) {
       setShowWinnerDialog(true);
       return;
     }
 
     const winnerId =
-      liveState.akaScore > liveState.aoScore
-        ? currentMatch.akaId! // NEED TO VERIFY NON-NULL
-        : currentMatch.aoId!;
+      state.akaScore > state.aoScore
+        ? currentMatchRef.current.akaId!
+        : currentMatchRef.current.aoId!;
 
     await finalizeSave(winnerId, false);
   }
 
   async function finalizeSave(winnerId: string, hantei: boolean) {
-    if (!currentMatch || !bracket) return;
+    const match = currentMatchRef.current;
+    const state = liveStateRef.current;
+    const { tournamentId: tid, bracketId: bid } = routeRef.current;
+    if (!match || !tid) return;
 
     setSaving(true);
     try {
-      await fetch(
-        `/api/tournaments/${resolvedParams!.tournamentId}/brackets/${
-          resolvedParams!.bracketId
-        }/matches/${currentMatch.id}`,
+      const res = await fetch(
+        `/api/tournaments/${tid}/brackets/${bid}/matches/${match.id}`,
         {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            akaScore: liveState.akaScore,
-            aoScore: liveState.aoScore,
+            akaScore: state.akaScore,
+            aoScore: state.aoScore,
             winnerId,
             decisionByHantei: hantei,
           }),
         },
       );
+      if (!res.ok) throw new Error();
 
-      // Announce winner on scoreboard before loading the next match
-      const winningSide = winnerId === currentMatch.akaId ? "aka" : "ao";
+      const winningSide = winnerId === match.akaId ? "aka" : "ao";
       announcedWinnerRef.current = winningSide;
       await broadcastState();
-      await new Promise((resolve) => setTimeout(resolve, 4000));
+      await new Promise((r) => setTimeout(r, 3000));
       announcedWinnerRef.current = null;
 
-      // Load next match (triggers broadcast with winner=null via Effect A)
-      await loadData();
-
       toast.success("Resultado salvo!");
-      resetState();
       setShowWinnerDialog(false);
-    } catch (error) {
+      goBack();
+    } catch {
       toast.error("Erro ao salvar resultado");
     } finally {
       setSaving(false);
@@ -357,24 +404,32 @@ export default function RefereePage({
   function handleTimeChange(value: string) {
     const newTime = parseInt(value);
     setSelectedDuration(newTime);
-    setLiveState((prev) => ({ ...prev, timeRemaining: newTime }));
+    setLiveState((prev) => ({
+      ...prev,
+      timeRemaining: newTime,
+      timerRunning: false,
+    }));
+    // Update ref immediately so broadcast reads the new time, not the stale one
+    liveStateRef.current = {
+      ...liveStateRef.current,
+      timeRemaining: newTime,
+      timerRunning: false,
+    };
+    scheduleBroadcast();
+    // Blur the trigger so Space hotkey starts the timer instead of reopening the select
+    (document.activeElement as HTMLElement)?.blur();
   }
 
   function resetState() {
-    setLiveState({
-      akaScore: 0,
-      aoScore: 0,
-      akaChui: 0,
-      aoChui: 0,
-      akaSenshu: false,
-      aoSenshu: false,
-      timeRemaining: 120,
-      timerRunning: false,
-    });
+    const newState = { ...INITIAL_STATE, timeRemaining: selectedDuration };
+    setLiveState(newState);
+    liveStateRef.current = newState;
+    scheduleBroadcast();
   }
 
-  const minutes = Math.floor(liveState.timeRemaining / 60);
-  const seconds = liveState.timeRemaining % 60;
+  const hasTimer = liveState.timeRemaining >= 0;
+  const minutes = hasTimer ? Math.floor(liveState.timeRemaining / 60) : null;
+  const seconds = hasTimer ? liveState.timeRemaining % 60 : null;
 
   if (loading) {
     return (
@@ -385,495 +440,338 @@ export default function RefereePage({
   }
 
   if (!currentMatch || !currentMatch.aka || !currentMatch.ao) {
-    // Calcular estatísticas
-    const completedMatches = allMatches.filter((m) => m.isCompleted);
-    const totalMatches = allMatches.length;
-
     return (
       <div className="flex items-center justify-center p-6">
-        <Card className="max-w-2xl w-full">
-          <CardHeader className="text-center">
-            <div className="mx-auto mb-4 h-16 w-16 rounded-full bg-green-100 dark:bg-green-900 flex items-center justify-center">
-              <CheckCircle className="h-10 w-10 text-green-600 dark:text-green-400" />
-            </div>
-            <CardTitle className="text-3xl">Chave Concluída!</CardTitle>
-            <p className="text-muted-foreground mt-2">
-              Todas as lutas desta chave foram finalizadas
+        <Card className="max-w-md w-full">
+          <CardContent className="py-12 text-center space-y-4">
+            <p className="text-muted-foreground">
+              Luta não disponível para arbitragem.
             </p>
-          </CardHeader>
-
-          <CardContent className="space-y-6">
-            {/* Estatísticas */}
-            <div className="grid grid-cols-2 gap-4">
-              <div className="text-center p-4 bg-muted rounded-lg">
-                <p className="text-sm text-muted-foreground mb-1">
-                  Total de Lutas
-                </p>
-                <p className="text-3xl font-bold">{totalMatches}</p>
-              </div>
-              <div className="text-center p-4 bg-muted rounded-lg">
-                <p className="text-sm text-muted-foreground mb-1">Concluídas</p>
-                <p className="text-3xl font-bold text-green-600">
-                  {completedMatches.length}
-                </p>
-              </div>
-            </div>
-
-            {/* Info da Chave */}
-            <div className="border rounded-lg p-4 space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-muted-foreground">
-                  Modalidade:
-                </span>
-                <Badge variant="secondary">{bracket?.modality}</Badge>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-muted-foreground">
-                  Categoria:
-                </span>
-                <span className="font-mono text-sm">{bracket?.category}</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-muted-foreground">Status:</span>
-                <Badge className="bg-green-600">
-                  {bracket?.status === "COMPLETED" ? "Concluída" : "Finalizada"}
-                </Badge>
-              </div>
-            </div>
-
-            {/* Resumo das Lutas */}
-            <div>
-              <h3 className="font-semibold mb-3 flex items-center gap-2">
-                <Trophy className="h-5 w-5" />
-                Resumo das Lutas
-              </h3>
-              <div className="space-y-2 max-h-[300px] overflow-y-auto">
-                {completedMatches.map((match) => (
-                  <div
-                    key={match.id}
-                    className="flex items-center justify-between p-3 bg-muted rounded-lg text-sm"
-                  >
-                    <div className="flex-1">
-                      <div className="font-medium">
-                        {match.aka?.name} vs {match.ao?.name}
-                      </div>
-                      <div className="text-xs text-muted-foreground">
-                        Rodada {match.round} - Luta {match.position + 1}
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <div className="font-mono font-bold">
-                        {match.akaScore} x {match.aoScore}
-                      </div>
-                      <div className="text-xs text-muted-foreground">
-                        Vencedor:{" "}
-                        {match.winnerId === match.akaId ? "AKA" : "AO"}
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Botões */}
-            <div className="flex gap-3 pt-4">
-              <Link
-                href={`/app/${resolvedParams?.tournamentId}/brackets/${resolvedParams?.bracketId}`}
-                className="flex-1"
-              >
-                <Button className="w-full" size="lg">
-                  <ArrowLeft className="mr-2 h-4 w-4" />
-                  Ver Chave Completa
-                </Button>
-              </Link>
-              <Link
-                href={`/app/${resolvedParams?.tournamentId}/brackets#bracket-${resolvedParams?.bracketId}`}
-                className="flex-1"
-              >
-                <Button variant="outline" className="w-full" size="lg">
-                  Voltar para Chaves
-                </Button>
-              </Link>
-            </div>
+            <Button onClick={goBack} variant="outline">
+              <ArrowLeft className="mr-2 h-4 w-4" />
+              Voltar para a Chave
+            </Button>
           </CardContent>
         </Card>
       </div>
     );
   }
 
+  const matchTypeLabel = getMatchTypeLabel(currentMatch, bracket);
+
   return (
     <div className="min-h-screen bg-background p-4">
-      <div className="max-w-7xl mx-auto space-y-6">
+      <div className="max-w-4xl mx-auto space-y-6">
         {/* Header */}
         <div className="flex items-center justify-between">
-          <Link
-            href={`/app/${resolvedParams?.tournamentId}/brackets/${resolvedParams?.bracketId}`}
-          >
-            <Button variant="ghost" size="icon">
-              <ArrowLeft />
-            </Button>
-          </Link>
+          <Button variant="ghost" size="icon" onClick={goBack}>
+            <ArrowLeft />
+          </Button>
 
           <div className="text-center flex-1">
-            <h1 className="text-2xl font-bold">Painel do Árbitro</h1>
+            {matchTypeLabel && (
+              <Badge variant="secondary">{matchTypeLabel}</Badge>
+            )}
             <div className="flex items-center justify-center gap-2 mt-1">
-              <span className="text-sm text-muted-foreground">
-                {bracket?.category || "N/A"}
+              <span className="text-lg font-semibold font-mono">
+                {bracket?.category}
               </span>
             </div>
             <p className="text-xs text-muted-foreground mt-1">
-              Rodada {currentMatch.round} - Luta {currentMatch.position + 1}
-              {(() => {
-                const matchType = getMatchTypeLabel(currentMatch, bracket);
-                return matchType.label ? ` • ${matchType.label}` : "";
-              })()}
+              Rodada {currentMatch.round} • Luta {currentMatch.position + 1}
             </p>
           </div>
 
-          <Link
-            href={`/app/${resolvedParams?.tournamentId}/scoreboard`}
-            target="_blank"
-          >
-            <Button variant="outline">Ver Scoreboard</Button>
-          </Link>
+          <Button variant="ghost" size="icon" asChild>
+            <Link
+              href={`/app/${tournamentId}/scoreboard?matchId=${currentMatch.id}`}
+              target="_blank"
+            >
+              <Presentation />
+            </Link>
+          </Button>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Painel Principal */}
-          <div className="lg:col-span-2 space-y-6">
-            {/* Timer com Seletor de Duração */}
-            <Card className="p-0">
-              <CardContent className="p-8 space-y-4">
-                {/* Seletor de Duração */}
-                <div className="flex items-center justify-center gap-4">
-                  <span className="text-sm text-muted-foreground">
-                    Duração:
-                  </span>
-                  <Select
-                    value={selectedDuration.toString()}
-                    onValueChange={handleTimeChange}
-                  >
-                    <SelectTrigger className="w-[180px]">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {TIME_OPTIONS.map((option) => (
-                        <SelectItem
-                          key={option.value}
-                          value={option.value.toString()}
-                        >
-                          {option.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                {/* Timer */}
-                <div className="flex items-center justify-center gap-6">
-                  <Button
-                    size="lg"
-                    variant="outline"
-                    onClick={() =>
-                      setLiveState((prev) => ({
-                        ...prev,
-                        timerRunning: !prev.timerRunning,
-                      }))
-                    }
-                  >
-                    {liveState.timerRunning ? (
-                      <Pause className="h-6 w-6" />
-                    ) : (
-                      <Play className="h-6 w-6" />
-                    )}
-                  </Button>
-
-                  <div
-                    className={cn(
-                      "text-8xl font-mono font-semibold",
-                      liveState.timerRunning
-                        ? "text-yellow-400"
-                        : "text-foreground",
-                    )}
-                  >
-                    {String(minutes).padStart(2, "0")}:
-                    {String(seconds).padStart(2, "0")}
-                  </div>
-
-                  <Button
-                    size="lg"
-                    variant="outline"
-                    onClick={() =>
-                      setLiveState((prev) => ({
-                        ...prev,
-                        timeRemaining: selectedDuration,
-                      }))
-                    }
-                  >
-                    <RotateCcw className="h-6 w-6" />
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Competitors */}
-            <div className="grid grid-cols-2 gap-6">
-              {/* AKA */}
-              <Card className="border-red-500 border-2 p-0">
-                <CardContent className="p-6 space-y-6">
-                  <div>
-                    <Badge className="bg-red-500 mb-2">AKA</Badge>
-                    <h2 className="text-3xl font-bold">
-                      {currentMatch.aka.name}
-                    </h2>
-                    <p className="text-muted-foreground">
-                      {currentMatch.aka.school}
-                    </p>
-                  </div>
-
-                  <div className="flex items-center justify-between">
-                    <Button
-                      size="lg"
-                      variant="outline"
-                      onClick={() =>
-                        setLiveState((prev) => ({
-                          ...prev,
-                          akaScore: Math.max(0, prev.akaScore - 1),
-                        }))
-                      }
-                    >
-                      -1
-                    </Button>
-                    <div className="text-8xl font-bold">
-                      {liveState.akaScore}
-                    </div>
-                    <Button
-                      size="lg"
-                      onClick={() =>
-                        setLiveState((prev) => ({
-                          ...prev,
-                          akaScore: prev.akaScore + 1,
-                        }))
-                      }
-                    >
-                      +1
-                    </Button>
-                  </div>
-
-                  <div>
-                    <p className="text-sm text-muted-foreground mb-2">
-                      Penalidades (Chui)
-                    </p>
-                    <div className="flex gap-2">
-                      {[1, 2, 3, 4].map((level) => (
-                        <Button
-                          key={level}
-                          size="sm"
-                          variant={
-                            liveState.akaChui >= level ? "default" : "outline"
-                          }
-                          onClick={() =>
-                            setLiveState((prev) => ({
-                              ...prev,
-                              akaChui:
-                                prev.akaChui === level ? level - 1 : level,
-                            }))
-                          }
-                        >
-                          {level}
-                        </Button>
-                      ))}
-                    </div>
-                  </div>
-
-                  <Button
-                    variant={liveState.akaSenshu ? "default" : "outline"}
-                    className="w-full"
-                    onClick={() =>
-                      setLiveState((prev) => ({
-                        ...prev,
-                        akaSenshu: !prev.akaSenshu,
-                      }))
-                    }
-                  >
-                    Senshu
-                  </Button>
-                </CardContent>
-              </Card>
-
-              {/* AO */}
-              <Card className="border-blue-500 border-2 p-0">
-                <CardContent className="p-6 space-y-6">
-                  <div>
-                    <Badge className="bg-blue-500 mb-2">AO</Badge>
-                    <h2 className="text-3xl font-bold">
-                      {currentMatch.ao.name}
-                    </h2>
-                    <p className="text-muted-foreground">
-                      {currentMatch.ao.school}
-                    </p>
-                  </div>
-
-                  <div className="flex items-center justify-between">
-                    <Button
-                      size="lg"
-                      variant="outline"
-                      onClick={() =>
-                        setLiveState((prev) => ({
-                          ...prev,
-                          aoScore: Math.max(0, prev.aoScore - 1),
-                        }))
-                      }
-                    >
-                      -1
-                    </Button>
-                    <div className="text-8xl font-bold">
-                      {liveState.aoScore}
-                    </div>
-                    <Button
-                      size="lg"
-                      onClick={() =>
-                        setLiveState((prev) => ({
-                          ...prev,
-                          aoScore: prev.aoScore + 1,
-                        }))
-                      }
-                    >
-                      +1
-                    </Button>
-                  </div>
-
-                  <div>
-                    <p className="text-sm text-muted-foreground mb-2">
-                      Penalidades (Chui)
-                    </p>
-                    <div className="flex gap-2">
-                      {[1, 2, 3, 4].map((level) => (
-                        <Button
-                          key={level}
-                          size="sm"
-                          variant={
-                            liveState.aoChui >= level ? "default" : "outline"
-                          }
-                          onClick={() =>
-                            setLiveState((prev) => ({
-                              ...prev,
-                              aoChui: prev.aoChui === level ? level - 1 : level,
-                            }))
-                          }
-                        >
-                          {level}
-                        </Button>
-                      ))}
-                    </div>
-                  </div>
-
-                  <Button
-                    variant={liveState.aoSenshu ? "default" : "outline"}
-                    className="w-full"
-                    onClick={() =>
-                      setLiveState((prev) => ({
-                        ...prev,
-                        aoSenshu: !prev.aoSenshu,
-                      }))
-                    }
-                  >
-                    Senshu
-                  </Button>
-                </CardContent>
-              </Card>
+        {/* Timer */}
+        <Card className="p-0">
+          <CardContent className="p-8 space-y-4">
+            <div className="flex items-center justify-center gap-4">
+              <span className="text-sm text-muted-foreground">Duração:</span>
+              <Select
+                value={selectedDuration.toString()}
+                onValueChange={handleTimeChange}
+                disabled={liveState.timerRunning}
+              >
+                <SelectTrigger className="w-[180px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {TIME_OPTIONS.map((opt) => (
+                    <SelectItem key={opt.value} value={opt.value.toString()}>
+                      {opt.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
-            {/* Actions */}
-            <div className="flex gap-4">
+            <div className="flex items-center justify-center gap-6">
               <Button
                 size="lg"
                 variant="outline"
-                className="flex-1"
-                onClick={resetState}
-                disabled={saving}
+                disabled={!hasTimer}
+                onClick={() =>
+                  setLiveState((prev) => ({
+                    ...prev,
+                    timerRunning: !prev.timerRunning,
+                  }))
+                }
               >
-                <RotateCcw className="mr-2 h-4 w-4" />
-                Reiniciar
-              </Button>
-              <Button
-                size="lg"
-                className="flex-1"
-                onClick={saveResult}
-                disabled={saving}
-              >
-                {saving ? (
-                  <>
-                    <Loader2 className="animate-spin" />
-                    Salvando...
-                  </>
+                {liveState.timerRunning ? (
+                  <Pause className="h-6 w-6" />
                 ) : (
-                  <>
-                    <Save />
-                    Salvar e Próxima
-                  </>
+                  <Play className="h-6 w-6" />
                 )}
               </Button>
-            </div>
-          </div>
 
-          {/* Sidebar - Lista de Lutas */}
-          <div className="lg:col-span-1">
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg">Lutas da Chave</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-2 max-h-[600px] overflow-y-auto">
-                {allMatches.map((match, index) => {
-                  const matchType = getMatchTypeLabel(match, bracket);
-                  return (
-                    <div
-                      key={match.id}
-                      className={cn(
-                        "p-3 rounded-lg border text-sm",
-                        match.id === currentMatch.id
-                          ? "border-primary bg-primary/5"
-                          : match.isCompleted
-                            ? "border-green-500/30 bg-green-500/5"
-                            : "border-border",
-                      )}
+              <div className="flex flex-col items-center gap-1">
+                <div
+                  className={cn(
+                    "text-8xl font-mono font-semibold tabular-nums leading-none",
+                    !hasTimer && "text-muted-foreground/50",
+                    hasTimer && liveState.timerRunning && "text-yellow-400",
+                    hasTimer &&
+                      !liveState.timerRunning &&
+                      liveState.timeRemaining === 0 &&
+                      "text-red-500",
+                  )}
+                >
+                  {hasTimer
+                    ? `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`
+                    : "00:00"}
+                </div>
+                {!hasTimer && (
+                  <span className="text-xs text-muted-foreground tracking-widest uppercase">
+                    sem tempo
+                  </span>
+                )}
+              </div>
+
+              <Button
+                size="lg"
+                variant="outline"
+                disabled={!hasTimer}
+                onClick={() =>
+                  setLiveState((prev) => ({
+                    ...prev,
+                    timeRemaining: selectedDuration,
+                    timerRunning: false,
+                  }))
+                }
+              >
+                <RotateCcw className="h-6 w-6" />
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Competitors */}
+        <div className="grid grid-cols-2 gap-6">
+          {/* AKA */}
+          <Card className="border-red-500 border-2 p-0">
+            <CardContent className="p-6 space-y-6">
+              <div>
+                <Badge className="bg-red-500 mb-2">AKA</Badge>
+                <h2 className="text-3xl font-bold">{currentMatch.aka.name}</h2>
+                <p className="text-muted-foreground">
+                  {currentMatch.aka.school}
+                </p>
+              </div>
+
+              <div className="flex items-center justify-between">
+                <Button
+                  size="lg"
+                  variant="outline"
+                  onClick={() =>
+                    setLiveState((prev) => ({
+                      ...prev,
+                      akaScore: Math.max(0, prev.akaScore - 1),
+                    }))
+                  }
+                >
+                  -1
+                </Button>
+                <div className="text-8xl font-bold">{liveState.akaScore}</div>
+                <Button
+                  size="lg"
+                  onClick={() =>
+                    setLiveState((prev) => {
+                      return {
+                        ...prev,
+                        akaScore: prev.akaScore + 1,
+                      };
+                    })
+                  }
+                >
+                  +1
+                </Button>
+              </div>
+
+              <div>
+                <p className="text-sm text-muted-foreground mb-2">
+                  Penalidades (Chui)
+                </p>
+                <div className="flex gap-2">
+                  {[1, 2, 3, 4].map((level) => (
+                    <Button
+                      key={level}
+                      size="sm"
+                      variant={
+                        liveState.akaChui >= level ? "default" : "outline"
+                      }
+                      onClick={() =>
+                        setLiveState((prev) => ({
+                          ...prev,
+                          akaChui: prev.akaChui === level ? level - 1 : level,
+                        }))
+                      }
                     >
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="text-xs text-muted-foreground">
-                          R{match.round} - L{match.position + 1}
-                        </span>
-                        <div className="flex items-center gap-1">
-                          {matchType.label && (
-                            <Badge
-                              variant={matchType.variant}
-                              className="text-xs"
-                            >
-                              {matchType.label}
-                            </Badge>
-                          )}
-                          {match.isCompleted && (
-                            <CheckCircle className="h-3 w-3 text-green-600" />
-                          )}
-                          {match.id === currentMatch.id && (
-                            <Badge variant="default" className="text-xs">
-                              Atual
-                            </Badge>
-                          )}
-                        </div>
-                      </div>
-                      <div className="font-medium">{match.aka?.name}</div>
-                      <div className="text-muted-foreground text-xs">vs</div>
-                      <div className="font-medium">{match.ao?.name}</div>
-                    </div>
-                  );
-                })}
-              </CardContent>
-            </Card>
-          </div>
+                      {level}
+                    </Button>
+                  ))}
+                </div>
+              </div>
+
+              <Button
+                variant={liveState.akaSenshu ? "default" : "outline"}
+                className="w-full"
+                onClick={() =>
+                  setLiveState((prev) => ({
+                    ...prev,
+                    akaSenshu: !prev.akaSenshu,
+                  }))
+                }
+              >
+                Senshu
+              </Button>
+            </CardContent>
+          </Card>
+
+          {/* AO */}
+          <Card className="border-blue-500 border-2 p-0">
+            <CardContent className="p-6 space-y-6">
+              <div>
+                <Badge className="bg-blue-500 mb-2">AO</Badge>
+                <h2 className="text-3xl font-bold">{currentMatch.ao.name}</h2>
+                <p className="text-muted-foreground">
+                  {currentMatch.ao.school}
+                </p>
+              </div>
+
+              <div className="flex items-center justify-between">
+                <Button
+                  size="lg"
+                  variant="outline"
+                  onClick={() =>
+                    setLiveState((prev) => ({
+                      ...prev,
+                      aoScore: Math.max(0, prev.aoScore - 1),
+                    }))
+                  }
+                >
+                  -1
+                </Button>
+                <div className="text-8xl font-bold">{liveState.aoScore}</div>
+                <Button
+                  size="lg"
+                  onClick={() =>
+                    setLiveState((prev) => {
+                      return {
+                        ...prev,
+                        aoScore: prev.aoScore + 1,
+                      };
+                    })
+                  }
+                >
+                  +1
+                </Button>
+              </div>
+
+              <div>
+                <p className="text-sm text-muted-foreground mb-2">
+                  Penalidades (Chui)
+                </p>
+                <div className="flex gap-2">
+                  {[1, 2, 3, 4].map((level) => (
+                    <Button
+                      key={level}
+                      size="sm"
+                      variant={
+                        liveState.aoChui >= level ? "default" : "outline"
+                      }
+                      onClick={() =>
+                        setLiveState((prev) => ({
+                          ...prev,
+                          aoChui: prev.aoChui === level ? level - 1 : level,
+                        }))
+                      }
+                    >
+                      {level}
+                    </Button>
+                  ))}
+                </div>
+              </div>
+
+              <Button
+                variant={liveState.aoSenshu ? "default" : "outline"}
+                className="w-full"
+                onClick={() =>
+                  setLiveState((prev) => ({
+                    ...prev,
+                    aoSenshu: !prev.aoSenshu,
+                  }))
+                }
+              >
+                Senshu
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Actions */}
+        <div className="flex gap-4">
+          <Button
+            size="lg"
+            variant="outline"
+            className="flex-1"
+            onClick={resetState}
+            disabled={saving}
+          >
+            <RotateCcw />
+            Reiniciar
+          </Button>
+          <Button
+            size="lg"
+            className="flex-1"
+            onClick={saveResult}
+            disabled={saving}
+          >
+            {saving ? (
+              <>
+                <Loader2 className="animate-spin mr-2 h-4 w-4" />
+                Salvando...
+              </>
+            ) : (
+              <>
+                <Save />
+                Finalizar Luta
+              </>
+            )}
+          </Button>
         </div>
       </div>
 
-      {/* Dialog de Decisão por Hantei */}
+      {/* Hantei dialog */}
       <AlertDialog open={showWinnerDialog} onOpenChange={setShowWinnerDialog}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -889,10 +787,7 @@ export default function RefereePage({
               size="lg"
               variant="outline"
               className="h-20 border-red-500 hover:bg-red-50"
-              onClick={() => {
-                setSelectedWinner(currentMatch!.akaId!);
-                finalizeSave(currentMatch!.akaId!, true);
-              }}
+              onClick={() => finalizeSave(currentMatch!.akaId!, true)}
               disabled={saving}
             >
               <div className="text-center">
@@ -906,10 +801,7 @@ export default function RefereePage({
               size="lg"
               variant="outline"
               className="h-20 border-blue-500 hover:bg-blue-50"
-              onClick={() => {
-                setSelectedWinner(currentMatch!.aoId!);
-                finalizeSave(currentMatch!.aoId!, true);
-              }}
+              onClick={() => finalizeSave(currentMatch!.aoId!, true)}
               disabled={saving}
             >
               <div className="text-center">

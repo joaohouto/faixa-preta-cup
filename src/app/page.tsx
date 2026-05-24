@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
 
-export default function NotFound() {
-  return redirect("/auth");
+export default function Page() {
+  return redirect("/app");
 }
