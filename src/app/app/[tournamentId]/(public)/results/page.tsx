@@ -181,7 +181,7 @@ export default function ResultsPage({
           <Header currentTournamentId={tournamentId} />
         </div>
 
-        <main className="flex-1">
+        <main className="flex-1 print:py-4">
           {/* print:pt-[72px] clears the fixed header; print:pb-[40px] clears the footer */}
           <div className="container mx-auto p-6 print:px-6 print:pt-[72px] print:pb-[40px]">
             {/* Screen header — hidden in print (print header replaces it) */}
@@ -298,7 +298,12 @@ function CategoryResultCard({ result }: { result: CategoryResult }) {
       {/* Card header */}
       <div
         className="flex items-center justify-between gap-2 px-3 py-2 border-b bg-muted/30 print:bg-transparent"
-        style={{ WebkitPrintColorAdjust: "exact", printColorAdjust: "exact" } as React.CSSProperties}
+        style={
+          {
+            WebkitPrintColorAdjust: "exact",
+            printColorAdjust: "exact",
+          } as React.CSSProperties
+        }
       >
         <span className="font-mono font-bold text-xs leading-tight print:text-[10px]">
           {result.category}
@@ -376,7 +381,9 @@ function PodiumRow({
   const { icon: Icon, label, iconClass, rowClass } = placeConfig[place];
 
   return (
-    <div className={cn("flex items-center gap-2 px-3 py-2 print:py-1.5", rowClass)}>
+    <div
+      className={cn("flex items-center gap-2 px-3 py-2 print:py-1.5", rowClass)}
+    >
       <div className={cn("flex items-center gap-1 w-7 shrink-0", iconClass)}>
         {Icon ? (
           <Icon className="size-3 shrink-0" />
