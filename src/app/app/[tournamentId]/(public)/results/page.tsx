@@ -146,10 +146,7 @@ export default function ResultsPage({
               {tournament?.name ?? "Campeonato"}
             </p>
           </div>
-          <FaixaPretaLogo
-            className="h-[10px] w-auto"
-            style={{ color: "#374151" } as React.CSSProperties}
-          />
+          <FaixaPretaLogo className="h-[10px] w-auto text-gray-700" />
         </div>
         <div style={{ borderTop: "1px solid #e5e7eb", margin: "0 1.5rem" }} />
       </div>

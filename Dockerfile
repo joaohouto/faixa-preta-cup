@@ -4,7 +4,8 @@ RUN apk add --no-cache libc6-compat openssl
 FROM base AS deps
 WORKDIR /app
 COPY package.json pnpm-lock.yaml ./
-RUN corepack enable pnpm && pnpm install --frozen-lockfile
+COPY prisma ./prisma
+RUN corepack enable pnpm && pnpm install --frozen-lockfile --ignore-scripts
 
 FROM base AS builder
 WORKDIR /app
@@ -12,7 +13,7 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV DATABASE_URL="file:/tmp/build.db"
-RUN corepack enable pnpm && pnpm run build
+RUN corepack enable pnpm && npx prisma generate && pnpm run build
 
 FROM base AS runner
 WORKDIR /app
