@@ -442,11 +442,6 @@ export default function ScoreboardPage({
                       ? `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`
                       : "00:00"}
                   </span>
-                  {!hasTimer && (
-                    <span className="text-[0.5rem] sm:text-xs lg:text-sm 2xl:text-xl tracking-widest uppercase text-muted-foreground/60">
-                      sem tempo
-                    </span>
-                  )}
                 </motion.div>
 
                 <p className="font-bold uppercase tracking-widest text-xs sm:text-lg md:text-xl lg:text-2xl xl:text-3xl 2xl:text-6xl">

@@ -145,9 +145,15 @@ function RefereePageContent({
   const isNavigatingRef = useRef(false);
 
   // Keep refs in sync
-  useEffect(() => { liveStateRef.current = liveState; }, [liveState]);
-  useEffect(() => { currentMatchRef.current = currentMatch; }, [currentMatch]);
-  useEffect(() => { bracketRef.current = bracket; }, [bracket]);
+  useEffect(() => {
+    liveStateRef.current = liveState;
+  }, [liveState]);
+  useEffect(() => {
+    currentMatchRef.current = currentMatch;
+  }, [currentMatch]);
+  useEffect(() => {
+    bracketRef.current = bracket;
+  }, [bracket]);
 
   // Compute absolute end timestamp whenever timer starts/stops
   useEffect(() => {
@@ -268,7 +274,8 @@ function RefereePageContent({
   }, []);
 
   function scheduleBroadcast() {
-    if (broadcastDebounceRef.current) clearTimeout(broadcastDebounceRef.current);
+    if (broadcastDebounceRef.current)
+      clearTimeout(broadcastDebounceRef.current);
     broadcastDebounceRef.current = setTimeout(broadcastState, 50);
   }
 
@@ -542,11 +549,6 @@ function RefereePageContent({
                     ? `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`
                     : "00:00"}
                 </div>
-                {!hasTimer && (
-                  <span className="text-xs text-muted-foreground tracking-widest uppercase">
-                    sem tempo
-                  </span>
-                )}
               </div>
 
               <Button
