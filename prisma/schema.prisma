@@ -145,8 +145,9 @@ model LiveMatch {
   akaSenshu Boolean @default(false)
   aoSenshu  Boolean @default(false)
 
-  timeRemaining Int     @default(120)
-  timerRunning  Boolean @default(false)
+  timeRemaining Int       @default(-1)
+  timerRunning  Boolean   @default(false)
+  timerEndAt    DateTime?
 
   winner String?
 

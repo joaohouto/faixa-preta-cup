@@ -45,7 +45,7 @@ export async function GET(req: NextRequest) {
       await sendUpdate();
 
       // Then keep polling for changes
-      const intervalId = setInterval(sendUpdate, 2000);
+      const intervalId = setInterval(sendUpdate, 300);
 
       // Cleanup
       req.signal.addEventListener("abort", () => {

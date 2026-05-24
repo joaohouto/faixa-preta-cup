@@ -141,19 +141,22 @@ function RefereePageContent({
     null,
   );
   const broadcastAbortRef = useRef<AbortController | null>(null);
-  const lastTimerBroadcastRef = useRef(0);
+  const timerEndAtRef = useRef<number | null>(null);
   const isNavigatingRef = useRef(false);
 
   // Keep refs in sync
+  useEffect(() => { liveStateRef.current = liveState; }, [liveState]);
+  useEffect(() => { currentMatchRef.current = currentMatch; }, [currentMatch]);
+  useEffect(() => { bracketRef.current = bracket; }, [bracket]);
+
+  // Compute absolute end timestamp whenever timer starts/stops
   useEffect(() => {
-    liveStateRef.current = liveState;
-  }, [liveState]);
-  useEffect(() => {
-    currentMatchRef.current = currentMatch;
-  }, [currentMatch]);
-  useEffect(() => {
-    bracketRef.current = bracket;
-  }, [bracket]);
+    if (liveState.timerRunning && liveState.timeRemaining > 0) {
+      timerEndAtRef.current = Date.now() + liveState.timeRemaining * 1000;
+    } else {
+      timerEndAtRef.current = null;
+    }
+  }, [liveState.timerRunning]);
 
   // Space = play/pause (only when there's a timer)
   useHotkeys(
@@ -218,17 +221,6 @@ function RefereePageContent({
     liveState.timerRunning,
   ]);
 
-  // Heartbeat: sync timer to DB at most every 10s during active countdown
-  useEffect(() => {
-    if (!liveState.timerRunning || liveState.timeRemaining <= 0) return;
-    const now = Date.now();
-    if (now - lastTimerBroadcastRef.current >= 10_000) {
-      lastTimerBroadcastRef.current = now;
-      broadcastState();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [liveState.timeRemaining]);
-
   // Stable broadcast — reads from refs, so never stale
   const broadcastState = useCallback(async () => {
     const match = currentMatchRef.current;
@@ -266,6 +258,7 @@ function RefereePageContent({
           position: match.position,
           totalRounds: br.totalRounds,
           ...state,
+          timerEndAt: timerEndAtRef.current,
           winner: announcedWinnerRef.current,
         }),
       });
@@ -275,9 +268,8 @@ function RefereePageContent({
   }, []);
 
   function scheduleBroadcast() {
-    if (broadcastDebounceRef.current)
-      clearTimeout(broadcastDebounceRef.current);
-    broadcastDebounceRef.current = setTimeout(broadcastState, 200);
+    if (broadcastDebounceRef.current) clearTimeout(broadcastDebounceRef.current);
+    broadcastDebounceRef.current = setTimeout(broadcastState, 50);
   }
 
   async function loadData() {

@@ -27,6 +27,7 @@ export async function POST(req: Request) {
       aoSenshu,
       timeRemaining,
       timerRunning,
+      timerEndAt,
       winner,
     } = body;
 
@@ -52,6 +53,7 @@ export async function POST(req: Request) {
       aoSenshu,
       timeRemaining,
       timerRunning,
+      timerEndAt: timerEndAt != null ? new Date(timerEndAt) : null,
       winner: winner ?? null,
     };
 

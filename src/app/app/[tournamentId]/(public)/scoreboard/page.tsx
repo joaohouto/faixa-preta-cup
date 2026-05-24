@@ -46,16 +46,14 @@ export default function ScoreboardPage({
       return;
     }
 
-    // timeRemaining < 0 means "no timer" sentinel
+    // Sync local time from server: only when paused or no timer.
+    // When running, the timerEndAt effect computes the exact value.
     if (liveMatch.timeRemaining < 0) {
       setLocalTime(-1);
       localTimeRef.current = -1;
-    } else {
-      const drift = Math.abs(liveMatch.timeRemaining - localTimeRef.current);
-      if (!liveMatch.timerRunning || drift > 2) {
-        setLocalTime(liveMatch.timeRemaining);
-        localTimeRef.current = liveMatch.timeRemaining;
-      }
+    } else if (!liveMatch.timerEndAt) {
+      setLocalTime(liveMatch.timeRemaining);
+      localTimeRef.current = liveMatch.timeRemaining;
     }
 
     const akaScored = liveMatch.akaScore > prevScoresRef.current.aka;
@@ -85,21 +83,22 @@ export default function ScoreboardPage({
     prevScoresRef.current = { aka: liveMatch.akaScore, ao: liveMatch.aoScore };
   }, [liveMatch]);
 
-  // Local countdown — runs client-side, no server round-trip needed per tick
+  // Countdown computed from absolute timerEndAt — no drift, no server sync needed
   useEffect(() => {
-    if (!liveMatch?.timerRunning || localTime <= 0) return;
+    const endAt = liveMatch?.timerEndAt
+      ? new Date(liveMatch.timerEndAt).getTime()
+      : null;
+    if (!endAt) return;
 
-    const interval = setInterval(() => {
-      setLocalTime((prev) => {
-        const next = Math.max(0, prev - 1);
-        localTimeRef.current = next;
-        return next;
-      });
-    }, 1000);
-
+    const tick = () => {
+      const remaining = Math.max(0, Math.ceil((endAt - Date.now()) / 1000));
+      setLocalTime(remaining);
+      localTimeRef.current = remaining;
+    };
+    tick();
+    const interval = setInterval(tick, 500);
     return () => clearInterval(interval);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [liveMatch?.timerRunning, localTime > 0]);
+  }, [liveMatch?.timerEndAt]);
 
   const hasTimer = localTime >= 0;
   const minutes = hasTimer ? Math.floor(localTime / 60) : null;
