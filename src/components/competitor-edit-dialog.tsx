@@ -47,6 +47,7 @@ import {
   competitorSchema,
   type CompetitorFormValues,
 } from "@/lib/schemas/competitor";
+import { fetchJson } from "@/lib/api-client";
 
 interface CompetitorEditDialogProps {
   competitor: Competitor | null;
@@ -97,7 +98,7 @@ export function CompetitorEditDialog({
     if (!competitor) return;
 
     try {
-      const response = await fetch(
+      await fetchJson(
         `/api/tournaments/${competitor.tournamentId}/competitors/${competitor.id}`,
         {
           method: "PUT",
@@ -108,15 +109,11 @@ export function CompetitorEditDialog({
         }
       );
 
-      if (!response.ok) {
-        throw new Error("Failed to update competitor");
-      }
-
       toast.success("Competidor atualizado com sucesso!");
       onOpenChange(false);
       onCompetitorUpdated();
-    } catch (error) {
-      toast.error("Falha ao atualizar competidor.");
+    } catch (error: any) {
+      toast.error(error.message || "Falha ao atualizar competidor.");
     }
   }
 
@@ -124,23 +121,19 @@ export function CompetitorEditDialog({
     if (!competitor) return;
 
     try {
-      const response = await fetch(
+      await fetchJson(
         `/api/tournaments/${competitor.tournamentId}/competitors/${competitor.id}`,
         {
           method: "DELETE",
         }
       );
 
-      if (!response.ok) {
-        throw new Error("Failed to delete competitor");
-      }
-
       toast.success("Competidor excluído com sucesso!");
       setDeleteDialogOpen(false);
       onOpenChange(false);
       onCompetitorUpdated();
-    } catch (error) {
-      toast.error("Falha ao excluir competidor.");
+    } catch (error: any) {
+      toast.error(error.message || "Falha ao excluir competidor.");
     }
   }
 

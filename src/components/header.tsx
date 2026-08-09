@@ -1,3 +1,5 @@
+"use client";
+
 import {
   File,
   FileTextIcon,
@@ -41,6 +43,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Tournament } from "@prisma/client";
 import Link from "next/link";
+import { fetchJson } from "@/lib/api-client";
 
 export function Header({
   currentTournamentId,
@@ -52,14 +55,19 @@ export function Header({
 
   useEffect(() => {
     async function fetchTournaments() {
-      const response = await fetch("/api/tournaments");
-      const data = await response.json();
-      setTournaments(data);
+      try {
+        const data = await fetchJson<Tournament[]>("/api/tournaments");
+        setTournaments(data);
+      } catch {
+        // Lista de campeonatos no menu é secundária — falha aqui não
+        // impede o resto da página de funcionar, então não interrompe
+        // com um toast.
+      }
     }
     fetchTournaments();
   }, []);
 
-  const navigationLinks = currentTournamentId
+  const tournamentLinks = currentTournamentId
     ? [
         {
           href: `/app/${currentTournamentId}/competitors`,
@@ -84,6 +92,12 @@ export function Header({
         },
       ]
     : [];
+
+  // Documentação não depende de um torneio selecionado, então fica sempre visível
+  const navigationLinks = [
+    ...tournamentLinks,
+    { href: "/app/docs", label: "Documentação", icon: File },
+  ];
 
   return (
     <header className="border-b px-4 md:px-6 print:hidden">

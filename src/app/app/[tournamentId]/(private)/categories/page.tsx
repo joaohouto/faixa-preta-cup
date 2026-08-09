@@ -30,6 +30,9 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from "@/components/ui/empty";
+import { Skeleton } from "@/components/ui/skeleton";
+import { fetchJson } from "@/lib/api-client";
+import { useEscBack } from "@/hooks/use-esc-back";
 
 interface CategoryGroup {
   category: string;
@@ -42,6 +45,7 @@ export default function CategoriesPage({
 }: {
   params: Promise<{ tournamentId: string }>;
 }) {
+  useEscBack();
   const [tournament, setTournament] = useState<Tournament | null>(null);
   const [kataCategories, setKataCategories] = useState<CategoryGroup[]>([]);
   const [kumiteCategories, setKumiteCategories] = useState<CategoryGroup[]>([]);
@@ -57,19 +61,19 @@ export default function CategoriesPage({
   useEffect(() => {
     async function fetchData() {
       try {
-        const res = await fetch(
-          `/api/tournaments/${resolvedParams!.tournamentId}/categories`
-        );
-
-        if (!res.ok) throw new Error("Failed to fetch categories");
-
-        const data = await res.json();
+        const data = await fetchJson<{
+          tournament: Tournament | null;
+          kataCategories: CategoryGroup[];
+          kumiteCategories: CategoryGroup[];
+        }>(`/api/tournaments/${resolvedParams!.tournamentId}/categories`);
 
         setTournament(data.tournament || null);
         setKataCategories(data.kataCategories || []);
         setKumiteCategories(data.kumiteCategories || []);
       } catch (error) {
-        toast.error("Falha ao carregar categorias.");
+        toast.error(
+          error instanceof Error ? error.message : "Falha ao carregar categorias."
+        );
       } finally {
         setLoading(false);
       }
@@ -83,9 +87,9 @@ export default function CategoriesPage({
   if (loading) {
     return (
       <div className="container mx-auto p-6">
-        <div className="animate-pulse space-y-4">
-          <div className="h-8 bg-muted rounded-xl w-1/4" />
-          <div className="h-4 bg-muted rounded-xl w-1/3" />
+        <div className="space-y-4">
+          <Skeleton className="h-8 w-1/4" />
+          <Skeleton className="h-4 w-1/3" />
         </div>
       </div>
     );

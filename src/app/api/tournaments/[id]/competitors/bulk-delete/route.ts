@@ -1,11 +1,11 @@
 import { db } from "@/lib/prisma";
 import { NextResponse } from "next/server";
+import { apiError } from "@/lib/api-error";
+import { withApiHandler } from "@/lib/api-handler";
 
-export async function DELETE(
-  req: Request,
-  context: { params: Promise<{ id: string }> }
-) {
-  try {
+export const DELETE = withApiHandler(
+  "COMPETITORS_BULK_DELETE",
+  async (req: Request, context: { params: Promise<{ id: string }> }) => {
     const { id: tournamentId } = await context.params;
 
     const bracketsInProgress = await db.bracket.findFirst({
@@ -18,9 +18,9 @@ export async function DELETE(
     });
 
     if (bracketsInProgress) {
-      return new NextResponse(
+      return apiError(
         "Não é possível excluir todos os competidores enquanto há chaves em andamento ou finalizadas.",
-        { status: 400 }
+        400
       );
     }
 
@@ -38,8 +38,5 @@ export async function DELETE(
     return NextResponse.json({
       deletedCount: result.count,
     });
-  } catch (error) {
-    console.log("[COMPETITORS_BULK_DELETE]", error);
-    return new NextResponse("Internal Error", { status: 500 });
   }
-}
+);

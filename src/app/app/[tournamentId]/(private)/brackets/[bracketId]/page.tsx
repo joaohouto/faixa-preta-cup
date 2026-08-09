@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Match, Bracket, Competitor } from "@prisma/client";
 import { toast } from "sonner";
-import { ArrowLeft, Trophy, Medal, Clock } from "lucide-react";
+import { ArrowLeft, Clock } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
@@ -11,6 +11,15 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import { useEscBack } from "@/hooks/use-esc-back";
+import { Skeleton } from "@/components/ui/skeleton";
+import { fetchJson } from "@/lib/api-client";
+import {
+  bracketStatusLabel,
+  bracketStatusBadgeClass,
+  winnerTextClass,
+  completedRowClass,
+} from "@/lib/utils/bracket-status";
 
 type MatchWithCompetitors = Match & {
   aka?: Competitor;
@@ -28,12 +37,18 @@ export default function BracketDetailPage({
   params: Promise<{ tournamentId: string; bracketId: string }>;
 }) {
   const router = useRouter();
+  useEscBack();
+
   const [bracket, setBracket] = useState<BracketWithMatches | null>(null);
   const [loading, setLoading] = useState(true);
   const [resolvedParams, setResolvedParams] = useState<{
     tournamentId: string;
     bracketId: string;
   } | null>(null);
+
+  // Competidores mudam raramente depois que a chave existe — busca uma vez
+  // e reaproveita nos polls seguintes, que só recarregam os matches.
+  const competitorsMapRef = useRef<Map<string, Competitor>>(new Map());
 
   useEffect(() => {
     params.then((p) => setResolvedParams(p));
@@ -45,36 +60,60 @@ export default function BracketDetailPage({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [resolvedParams?.tournamentId, resolvedParams?.bracketId]);
 
+  // Atualização ao vivo: outro árbitro pode estar registrando resultados
+  // nessa mesma chave em paralelo. Enquanto a chave não estiver concluída,
+  // busca os matches de novo periodicamente (polling simples via GET) —
+  // ver explicação da escolha na mensagem de resumo.
+  useEffect(() => {
+    if (!resolvedParams || bracket?.status === "COMPLETED") return;
+    const interval = setInterval(refreshMatches, 5000);
+    return () => clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [resolvedParams?.tournamentId, resolvedParams?.bracketId, bracket?.status]);
+
+  function attachCompetitors(data: Bracket & { matches: Match[] }) {
+    const competitorsMap = competitorsMapRef.current;
+    const matchesWithComps = data.matches.map((m: Match) => ({
+      ...m,
+      aka: m.akaId ? competitorsMap.get(m.akaId) : undefined,
+      ao: m.aoId ? competitorsMap.get(m.aoId) : undefined,
+      winner: m.winnerId ? competitorsMap.get(m.winnerId) : undefined,
+    }));
+    return { ...data, matches: matchesWithComps };
+  }
+
   async function fetchData() {
     try {
       setLoading(true);
 
-      const res = await fetch(
+      const data = await fetchJson<Bracket & { matches: Match[] }>(
         `/api/tournaments/${resolvedParams!.tournamentId}/brackets/${resolvedParams!.bracketId}`,
       );
-      if (!res.ok) throw new Error("Falha ao buscar chave");
-      const data = await res.json();
 
-      const compRes = await fetch(
+      const competitors = await fetchJson<Competitor[]>(
         `/api/tournaments/${resolvedParams!.tournamentId}/competitors`,
       );
-      if (!compRes.ok) throw new Error("Falha ao carregar competidores");
-      const competitors: Competitor[] = await compRes.json();
+      competitorsMapRef.current = new Map(competitors.map((c) => [c.id, c]));
 
-      const competitorsMap = new Map(competitors.map((c) => [c.id, c]));
-      const matchesWithComps = data.matches.map((m: Match) => ({
-        ...m,
-        aka: m.akaId ? competitorsMap.get(m.akaId) : undefined,
-        ao: m.aoId ? competitorsMap.get(m.aoId) : undefined,
-        winner: m.winnerId ? competitorsMap.get(m.winnerId) : undefined,
-      }));
-
-      setBracket({ ...data, matches: matchesWithComps });
+      setBracket(attachCompetitors(data));
     } catch (err) {
-      console.error(err);
-      toast.error("Erro ao carregar chave e lutas.");
+      toast.error(
+        err instanceof Error ? err.message : "Erro ao carregar chave e lutas.",
+      );
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function refreshMatches() {
+    if (!resolvedParams) return;
+    try {
+      const data = await fetchJson<Bracket & { matches: Match[] }>(
+        `/api/tournaments/${resolvedParams.tournamentId}/brackets/${resolvedParams.bracketId}`,
+      );
+      setBracket(attachCompetitors(data));
+    } catch {
+      // poll silencioso — falha pontual não precisa de toast
     }
   }
 
@@ -87,9 +126,9 @@ export default function BracketDetailPage({
   if (loading) {
     return (
       <div className="container mx-auto p-6">
-        <div className="animate-pulse space-y-4">
-          <div className="h-8 bg-muted rounded-xl w-1/4" />
-          <div className="h-4 bg-muted rounded-xl w-1/3" />
+        <div className="space-y-4">
+          <Skeleton className="h-8 w-1/4" />
+          <Skeleton className="h-4 w-1/3" />
         </div>
       </div>
     );
@@ -121,44 +160,40 @@ export default function BracketDetailPage({
     .sort((a, b) => a - b);
 
   const thirdPlaceMatch = bracket.matches.find((m) => m.isThirdPlace);
-  const finalMatch = bracket.matches.find(
-    (m) => m.round === bracket.totalRounds && !m.isThirdPlace,
-  );
-  const champion = finalMatch?.winner;
 
   return (
     <div className="container mx-auto p-6 print:p-0">
       {/* Header */}
-      <div className="mb-6 flex items-center gap-4">
+      <div className="mb-6 flex items-start gap-3 sm:gap-4">
         <Link
           href={`/app/${resolvedParams?.tournamentId}/brackets`}
-          className="print:hidden"
+          className="print:hidden shrink-0"
         >
           <Button variant="ghost" size="icon">
             <ArrowLeft />
           </Button>
         </Link>
-        <div className="flex-1">
-          <h1 className="text-2xl font-bold font-mono">{bracket.category}</h1>
-          <div className="flex items-center gap-2 mt-1">
+        <div className="flex-1 min-w-0">
+          <h1 className="text-lg sm:text-2xl font-bold font-mono break-words">
+            {bracket.category}
+          </h1>
+          <div className="flex items-center flex-wrap gap-x-2 gap-y-1 mt-1">
             <Badge variant="secondary">{bracket.modality}</Badge>
             <Badge
               variant="outline"
-              className={cn(
-                bracket.status === "IN_PROGRESS" &&
-                  "border-blue-500/40 bg-blue-500/10 text-blue-600 dark:text-blue-400",
-                bracket.status === "COMPLETED" &&
-                  "border-green-500/40 bg-green-500/10 text-green-600 dark:text-green-400",
-                bracket.status === "NOT_STARTED" && "text-muted-foreground",
-              )}
+              className={bracketStatusBadgeClass[bracket.status]}
             >
-              {bracket.status === "NOT_STARTED" && "Não iniciado"}
-              {bracket.status === "IN_PROGRESS" && "Em andamento"}
-              {bracket.status === "COMPLETED" && "Concluído"}
+              {bracketStatusLabel[bracket.status]}
             </Badge>
             <span className="text-sm text-muted-foreground">
               {bracket.totalSlots} vagas • {bracket.totalRounds} rodadas
             </span>
+            {bracket.status !== "COMPLETED" && (
+              <span className="flex items-center gap-1.5 text-xs text-muted-foreground print:hidden">
+                <span className="size-1.5 rounded-full bg-blue-400 animate-pulse" />
+                acompanhando ao vivo
+              </span>
+            )}
           </div>
         </div>
       </div>
@@ -229,7 +264,6 @@ export default function BracketDetailPage({
               <div className="flex justify-center">
                 <MatchCard
                   match={thirdPlaceMatch}
-                  isThirdPlace
                   onStart={() => startReferee(thirdPlaceMatch.id)}
                 />
               </div>
@@ -255,11 +289,7 @@ export default function BracketDetailPage({
               {matchesByRound[roundNum]
                 .filter((m) => !m.isThirdPlace)
                 .map((match, idx) => (
-                  <MatchListRow
-                    key={match.id}
-                    match={match}
-                    index={idx}
-                  />
+                  <MatchListRow key={match.id} match={match} index={idx} />
                 ))}
             </CardContent>
           </Card>
@@ -269,15 +299,11 @@ export default function BracketDetailPage({
           <Card>
             <CardHeader>
               <CardTitle className="text-lg flex items-center gap-2">
-                <Medal className="h-5 w-5 text-amber-600" />
                 Disputa de 3º Lugar
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <MatchListRow
-                match={thirdPlaceMatch}
-                index={0}
-              />
+              <MatchListRow match={thirdPlaceMatch} index={0} />
             </CardContent>
           </Card>
         )}
@@ -291,11 +317,9 @@ export default function BracketDetailPage({
 function MatchCard({
   match,
   onStart,
-  isThirdPlace,
 }: {
   match: MatchWithCompetitors;
   onStart: () => void;
-  isThirdPlace?: boolean;
 }) {
   const canStart = match.aka && match.ao && !match.isBye && !match.isCompleted;
   const isCompleted = match.isCompleted;
@@ -327,8 +351,18 @@ function MatchCard({
               <span className="text-xs text-red-600 font-semibold">AKA</span>
               <span className="text-sm truncate">{match.aka?.name || "—"}</span>
             </div>
-            {match.isCompleted && (
-              <span className="text-sm font-mono ml-2">{match.akaScore ?? 0}</span>
+            {match.isCompleted && match.isWalkover ? (
+              match.winnerId !== match.akaId && (
+                <Badge variant="secondary" className="text-[10px] ml-2 shrink-0">
+                  W.O.
+                </Badge>
+              )
+            ) : (
+              match.isCompleted && (
+                <span className="text-sm font-mono ml-2">
+                  {match.akaScore ?? 0}
+                </span>
+              )
             )}
           </div>
           {match.aka && (
@@ -351,8 +385,18 @@ function MatchCard({
               <span className="text-xs text-blue-600 font-semibold">AO</span>
               <span className="text-sm truncate">{match.ao?.name || "—"}</span>
             </div>
-            {match.isCompleted && (
-              <span className="text-sm font-mono ml-2">{match.aoScore ?? 0}</span>
+            {match.isCompleted && match.isWalkover ? (
+              match.winnerId !== match.aoId && (
+                <Badge variant="secondary" className="text-[10px] ml-2 shrink-0">
+                  W.O.
+                </Badge>
+              )
+            ) : (
+              match.isCompleted && (
+                <span className="text-sm font-mono ml-2">
+                  {match.aoScore ?? 0}
+                </span>
+              )
             )}
           </div>
           {match.ao && (
@@ -390,48 +434,59 @@ function MatchListRow({
   index: number;
 }) {
   return (
-    <div className="flex items-center justify-between p-3 border rounded-lg gap-4">
+    <div
+      className={cn(
+        "flex items-center justify-between p-3 border rounded-lg gap-4",
+        match.isCompleted && completedRowClass,
+      )}
+    >
       <div className="flex items-center gap-4 flex-1 min-w-0">
         <span className="text-sm font-medium text-muted-foreground shrink-0">
           #{index + 1}
         </span>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
+            <span className="text-xs text-red-600 font-semibold shrink-0">
+              AKA
+            </span>
             <span
               className={cn(
                 "text-sm",
-                match.winnerId === match.akaId && match.isCompleted && "font-bold",
+                match.winnerId === match.akaId &&
+                  match.isCompleted &&
+                  winnerTextClass,
               )}
             >
               {match.aka?.name || "—"}
             </span>
-            {match.isCompleted && match.winnerId === match.akaId && (
-              <Trophy className="h-3.5 w-3.5 text-yellow-500 shrink-0" />
-            )}
           </div>
           <div className="flex items-center gap-2">
+            <span className="text-xs text-blue-600 font-semibold shrink-0">
+              AO
+            </span>
             <span
               className={cn(
                 "text-sm",
-                match.winnerId === match.aoId && match.isCompleted && "font-bold",
+                match.winnerId === match.aoId &&
+                  match.isCompleted &&
+                  winnerTextClass,
               )}
             >
               {match.ao?.name || "—"}
             </span>
-            {match.isCompleted && match.winnerId === match.aoId && (
-              <Trophy className="h-3.5 w-3.5 text-yellow-500 shrink-0" />
-            )}
           </div>
         </div>
       </div>
 
       <div className="flex items-center gap-2 shrink-0">
-        {match.isCompleted ? (
+        {match.isBye ? (
+          <Badge variant="secondary">BYE</Badge>
+        ) : match.isWalkover ? (
+          <Badge variant="secondary">W.O.</Badge>
+        ) : match.isCompleted ? (
           <Badge variant="secondary" className="font-mono">
             {match.akaScore ?? 0} × {match.aoScore ?? 0}
           </Badge>
-        ) : match.isBye ? (
-          <Badge variant="secondary">BYE</Badge>
         ) : (
           <div className="flex items-center gap-1 text-xs text-muted-foreground">
             <Clock className="h-3.5 w-3.5" />

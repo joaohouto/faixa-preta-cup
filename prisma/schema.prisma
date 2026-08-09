@@ -105,19 +105,26 @@ model Match {
   aoScore  Int? @default(0)
 
   decisionByHantei Boolean @default(false)
+  akaSenshu        Boolean @default(false)
+  aoSenshu         Boolean @default(false)
 
-  isBye         Boolean @default(false)
-  isThirdPlace  Boolean @default(false)
-  isFourthPlace Boolean @default(false)
+  isBye        Boolean @default(false)
+  isWalkover   Boolean @default(false)
+  isThirdPlace Boolean @default(false)
 
   isCompleted Boolean   @default(false)
   completedAt DateTime?
   createdAt   DateTime  @default(now())
 
+  // "Um match por posição" é garantido pelo banco, não só pela lógica de
+  // geração em bracket-generator.ts — protege contra corrida de
+  // requisições ou algum caminho futuro criando uma linha duplicada, o
+  // que faria os updateMany() de propagação (matches/[matchId]/route.ts
+  // e propagateByeWinners) atualizarem silenciosamente múltiplas linhas.
+  @@unique([bracketId, round, position])
   @@index([bracketId])
   @@index([round])
   @@index([isThirdPlace])
-  @@index([isFourthPlace])
 }
 
 model LiveMatch {

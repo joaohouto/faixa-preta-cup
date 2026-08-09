@@ -1,55 +1,52 @@
 import { db } from "@/lib/prisma";
 import { NextResponse } from "next/server";
+import { withApiHandler, requireEntity } from "@/lib/api-handler";
 
-export async function GET(
-  req: Request,
-  context: { params: Promise<{ id: string; bracketId: string }> }
-) {
-  try {
+export const GET = withApiHandler(
+  "BRACKET_GET",
+  async (
+    req: Request,
+    context: { params: Promise<{ id: string; bracketId: string }> }
+  ) => {
     const { id: tournamentId, bracketId } = await context.params;
 
-    const bracket = await db.bracket.findUnique({
-      where: { id: bracketId },
-      include: {
-        matches: {
-          orderBy: [{ round: "asc" }, { position: "asc" }],
+    const bracket = requireEntity(
+      await db.bracket.findUnique({
+        where: { id: bracketId },
+        include: {
+          matches: {
+            orderBy: [{ round: "asc" }, { position: "asc" }],
+          },
         },
-      },
-    });
-
-    if (!bracket || bracket.tournamentId !== tournamentId) {
-      return new NextResponse("Bracket not found", { status: 404 });
-    }
+      }),
+      "Bracket not found",
+      (b) => b.tournamentId === tournamentId
+    );
+    if (bracket instanceof Response) return bracket;
 
     return NextResponse.json(bracket);
-  } catch (error) {
-    console.log("[BRACKET_GET]", error);
-    return new NextResponse("Internal Error", { status: 500 });
   }
-}
+);
 
-export async function DELETE(
-  req: Request,
-  context: { params: Promise<{ id: string; bracketId: string }> }
-) {
-  try {
+export const DELETE = withApiHandler(
+  "BRACKET_DELETE",
+  async (
+    req: Request,
+    context: { params: Promise<{ id: string; bracketId: string }> }
+  ) => {
     const { id: tournamentId, bracketId } = await context.params;
 
-    const bracket = await db.bracket.findUnique({
-      where: { id: bracketId },
-    });
-
-    if (!bracket || bracket.tournamentId !== tournamentId) {
-      return new NextResponse("Bracket not found", { status: 404 });
-    }
+    const bracket = requireEntity(
+      await db.bracket.findUnique({ where: { id: bracketId } }),
+      "Bracket not found",
+      (b) => b.tournamentId === tournamentId
+    );
+    if (bracket instanceof Response) return bracket;
 
     await db.bracket.delete({
       where: { id: bracketId },
     });
 
     return new NextResponse(null, { status: 204 });
-  } catch (error) {
-    console.log("[BRACKET_DELETE]", error);
-    return new NextResponse("Internal Error", { status: 500 });
   }
-}
+);

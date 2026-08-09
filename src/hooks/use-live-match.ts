@@ -22,8 +22,6 @@ type LiveMatch = {
   timeRemaining: number;
   timerRunning: boolean;
   timerEndAt: string | null;
-  isThirdPlace: boolean;
-  isFourthPlace: boolean;
   winner: string | null;
 };
 

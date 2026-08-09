@@ -1,101 +1,92 @@
-**Faixa Preta Cup — Project Overview**
+# Faixa Preta Cup
 
-This repository implements a web application to manage karate tournaments (competitors, brackets, live matches, and results). The project is a Next.js + TypeScript app with a MongoDB-backed Prisma schema, NextAuth for authentication, and a React component library for the admin UI.
+Plataforma para gerenciar torneios de karatê: cadastro de competidores, classificação automática por faixa/idade/peso, geração e arbitragem de chaves (Kata e Kumite), placar ao vivo e relatório oficial de resultados.
 
-**Tech Stack**
+Sem login — qualquer pessoa com acesso à URL do app consegue operar. Pensado para ser usado por uma equipe pequena (organização + árbitros) na rede local do evento.
 
-- **Framework:** Next.js (app router)
-- **Language:** TypeScript, React 19
-- **ORM / DB:** Prisma (MongoDB provider)
-- **Auth:** next-auth
-- **Styling / UI:** Tailwind + Radix UI + custom components (shadcn)
+## Stack
 
-**Quick links**
+- **Next.js 15** (App Router) + **React 19** + TypeScript
+- **Prisma** + **SQLite** (arquivo local, sem serviço de banco externo)
+- Tailwind + Radix UI (shadcn)
+- `react-hotkeys-hook` (atalhos de teclado), `react-markdown` (aba de documentação), `papaparse` (import de CSV)
 
-- File: [package.json](package.json)
-- File: [prisma/schema.prisma](prisma/schema.prisma)
-- File: [src/lib/prisma.ts](src/lib/prisma.ts)
-- Folder: [src/app/api](src/app/api)
-- Folder: [src/components](src/components)
+## Rodando localmente
 
-**How to run (developer)**
+```bash
+pnpm install          # o postinstall já roda "prisma generate"
+cp .env.example .env  # ajuste DATABASE_URL / NEXT_PUBLIC_HOSTNAME se precisar
+pnpm dlx prisma migrate dev   # aplica as migrations no banco local (local.db)
+pnpm dev
+```
 
-- Install: `pnpm install` (project uses `postinstall` hook to run `prisma generate`)
-- Dev: `pnpm dev` (runs `next dev`)
-- Build: `pnpm build` then `pnpm start`
+Abre em `http://localhost:3000`.
 
-Environment variables (typical)
+### Banco de dados
 
-- `DATABASE_URL` — MongoDB connection string (used by Prisma)
-- `NEXTAUTH_SECRET` — secret for next-auth session encryption
-- `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` — we're using Google provider
+O projeto usa **migrations do Prisma** em desenvolvimento (histórico versionado em `prisma/migrations/`):
 
-See [docker-compose.yml](docker-compose.yml) for an example deployment stack (if provided).
+```bash
+npx prisma migrate dev      # cria/aplica migrations a partir de mudanças no schema.prisma
+npx prisma migrate status   # confere se o banco local está em dia com o schema
+npx prisma generate         # regenera o Prisma Client (roda sozinho no postinstall)
+```
 
-**Database & Prisma**
+> Depois de rodar uma migration com o `pnpm dev` já aberto em outro terminal, **reinicie o `pnpm dev`**. O client do Prisma é guardado em `globalThis` de propósito (evita estourar conexões no hot-reload do Next), então o processo não pega o client regerado sozinho — só reiniciando.
 
-- Prisma datasource uses `provider = "mongodb"` (see [prisma/schema.prisma](prisma/schema.prisma)).
-- The schema contains models: `User`, `Account`, `Session`, `Tournament`, `Competitor`, `Bracket`, `Match`, `LiveMatch` and enums like `Belt`, `Gender`, `Modality`, `BracketStatus`.
-- Important notes:
-  - `tournament -> Bracket -> Match` models represent tournament brackets and results.
-  - `LiveMatch` is a denormalized document used to power live-score/scoreboard functionality.
+Em produção (Docker), não são as migrations que rodam — veja "Deploy" abaixo.
 
-**API routes (overview)**
+## Deploy (Docker)
 
-- Routes live under `src/app/api`. Notable endpoints:
-  - `src/app/api/auth/[...nextauth]/route.ts` — next-auth handlers
-  - `src/app/api/live-match/route.ts` — manage live matches and streaming
-  - `src/app/api/tournaments/route.ts` and nested `.../[id]/route.ts` — tournament CRUD and nested resources (brackets, categories, competitors)
+```bash
+docker compose up -d --build
+```
 
-API conventions:
+O `Dockerfile` builda o Next em modo `standalone`. No `entrypoint.sh`, o container roda **`prisma db push --accept-data-loss --skip-generate`** contra `/data/local.db` (volume persistente `db_data`, ver `docker-compose.yml`) antes de subir o servidor — ele sincroniza o schema diretamente, sem depender do histórico de migrations estar presente na imagem final (`--skip-generate` porque o client já foi gerado no build; sem essa flag o `db push` tenta gerar de novo e falha ao copiar um `.d.ts` que o build standalone não inclui — não derruba o container, mas suja o log a cada start). Isso funciona bem pra esse tipo de deploy de container único, mas **é destrutivo em mudanças incompatíveis de schema** (`--accept-data-loss` aceita perda de dados quando necessário para aplicar a mudança) — não é o fluxo certo se um dia o projeto precisar de múltiplos ambientes com o mesmo banco.
 
-- Many endpoints follow REST-like patterns keyed by tournament and bracket ids. Use the route folder layout in `src/app/api` to enumerate endpoints programmatically.
+Testado nesta sessão: `docker build` + `docker run` de ponta a ponta (imagem builda, container sobe, `db push` cria o schema do zero em um volume vazio, app responde 200 em `/app`).
 
-**Frontend structure (high-level)**
+Variáveis de ambiente relevantes (ver `.env.example`):
 
-- Uses Next.js app router with pages under `src/app`.
-- Admin UI: `src/app/[tournamentId]/(private)` — pages for organizers and referees.
-- Public scoreboard: `src/app/[tournamentId]/(public)/scoreboard`.
-- Reusable UI components are under `src/components` and `src/components/ui` (shadcn and Luxe UI).
+- `DATABASE_URL` — caminho do arquivo SQLite (`file:./local.db` local, `file:/data/local.db` no container)
+- `NEXT_PUBLIC_HOSTNAME` — URL pública do app (usada em metadata/Open Graph)
 
-**Auth**
+**Antes do dia do torneio**, faça um teste ponta-a-ponta com essa imagem (não só `pnpm dev`) — é o que efetivamente vai rodar no evento:
 
-- Auth is implemented with `next-auth` and a Prisma adapter. See `src/app/api/auth/[...nextauth]/route.ts` and Prisma `Account`/`Session` models.
+```bash
+docker build -t faixa-preta-cup .
+docker compose up -d
+```
 
-**Data imports and CSVs**
+## Como operar um torneio
 
-- The `data/` folder contains CSVs and import helpers (e.g., competitor imports). `papaparse` and `xlsx` are available dependencies for parsing.
+1. **Criar o campeonato** — tela inicial (`/app`), escolha um nome.
+2. **Competidores** — cadastro manual ou import de `.csv` em lote (o dialog de import mostra os campos e valores aceitos; ver também a aba Documentação → Importação no app). Categoria de Kata/Kumite é calculada automaticamente a partir de faixa, idade, sexo e peso — não é escolhida manualmente.
+3. **Categorias e Chaves** — gere as chaves por categoria (ou todas de uma vez). Eliminação simples, com bye automático quando o número de competidores não é potência de 2, e disputa de 3º lugar quando há 4+ competidores.
+4. **Arbitragem** — abra uma luta pela chave. Placar manual, timer configurável (`Espaço` inicia/pausa), Senshu e Chui são informativos. Empate exige decisão por Hantei. Se um competidor faltar, use **Ausente (W.O.)** no card dele — diferente de bye, W.O. só existe quando os dois estavam escalados. O estado da luta é transmitido ao vivo (SSE) para o Scoreboard público, pra outra pessoa acompanhar em tempo real.
+5. **Scoreboard** — tela pública (pensada pra telão/projeção), sem interação, mostra a luta em andamento.
+6. **Resultados** — classificação por categoria, atualiza sozinha, e tem impressão em PDF do relatório oficial (sempre em modo claro, mesmo com o app no tema escuro).
+7. **Documentação** (`/app/docs`) — aba fixa no menu, sempre visível: explica classificação, geração de chaves, regras de arbitragem e formato do CSV — é a referência pra dúvida no meio do evento.
 
-**Developer notes & scripts**
+Atalho `Esc` volta pra tela anterior em quase todo o app — **exceto na tela de árbitro**, onde sair sem querer no meio de uma luta perderia o placar (lá o botão de voltar pede confirmação em vez disso).
 
-- `postinstall` runs `prisma generate` so `pnpm install` will prepare the Prisma client.
-- Lint: `pnpm lint` (uses ESLint)
+## Estrutura do projeto
 
-**LLM Usage: How to ask about this repo**
-This section is oriented to help prompt an LLM (or a human using an LLM) to reason precisely about the codebase.
+```
+src/app/api/tournaments/…              rotas da API (torneio, competidores, categorias, chaves, resultados)
+src/app/app/[tournamentId]/(private)/  telas de organização (competidores, chaves, árbitro)
+src/app/app/[tournamentId]/(public)/   telas pra exibição (scoreboard, resultados) — impressão/telão
+                                        ("private"/"public" são só grupos de rota do Next.js, não controle de acesso — não há auth)
+src/app/app/docs/                      aba de documentação in-app
+src/lib/utils/classification.ts        regras de categoria (faixa/idade/peso)
+src/lib/utils/bracket-generator.ts     geração de chave (seeding, byes, 3º lugar)
+prisma/schema.prisma                   modelo de dados
+docs/features-overview.md              diagramas do fluxo completo (apoio pra apresentação)
+```
 
-- Goal-oriented prompt templates
+## Limitações conhecidas
 
-  - "List API endpoints with HTTP methods and expected JSON payloads from `src/app/api`." — useful to create integration tests or API docs.
-  - "Given `prisma/schema.prisma`, list the JSON shape for `Competitor` and `Match` resources used by the API." — useful before writing frontend forms.
-  - "Create a sequence of unit / integration tests for the `bracket-generator` algorithm." — point the LLM to `src/lib/utils/bracket-generator.ts`.
-
-- Example: Generate a curl sequence to create a tournament and add competitors
-
-  1. `POST /api/tournaments` with `{ "name": "My Cup" }` (authorization required)
-  2. `POST /api/tournaments/:id/competitors/import` with CSV payload or JSON array
-
-- Machine-friendly instructions for LLMs
-  - Prefer using the on-disk `src/app/api` folder structure to enumerate endpoints (do not guess endpoints not present).
-  - When editing code, always include the relative file path and a concise patch or a diff.
-  - Use the Prisma schema as the single source of truth for data shapes; if a model includes `@db.ObjectId` treat the id as a string containing a Mongo ObjectId.
-
-**What to document next (suggestions)**
-
-- Add an `API_ROUTES.md` autogenerated summary (a script could parse folder structure and produce a routes table).
-- Add `.env.example` listing required env vars used by `next-auth`, database, and optional OAuth providers.
-- Add short CONTRIBUTING.md describing local dev flow and how to run tests.
-
-**Contact / Maintainers**
-
-- The repository owner and active contributors are the best sources for workflow specifics (deploy secrets, OAuth client IDs, and production DB access).
+- Sem autenticação — não exponha a URL publicamente sem alguma camada de rede (VPN, rede local do evento, etc.).
+- SQLite em arquivo único — não é para múltiplas instâncias do app escrevendo ao mesmo tempo.
+- Chaves são de eliminação simples, sem repescagem.
+- `pnpm lint` requer um `eslint.config.js` que não está versionado neste checkout — os demais scripts (`dev`, `build`) não dependem disso.

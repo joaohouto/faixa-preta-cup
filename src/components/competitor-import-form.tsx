@@ -13,6 +13,7 @@ import { toast } from "sonner";
 import { useState, useRef } from "react";
 import { Loader2, Upload, FileText, X } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { fetchJson } from "@/lib/api-client";
 
 interface CompetitorImportFormProps {
   tournamentId: string;
@@ -66,7 +67,7 @@ export function CompetitorImportForm({
     formData.append("file", file);
 
     try {
-      const response = await fetch(
+      const data = await fetchJson<{ message?: string; count?: number }>(
         `/api/tournaments/${tournamentId}/competitors/import`,
         {
           method: "POST",
@@ -74,12 +75,6 @@ export function CompetitorImportForm({
         }
       );
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || "Falha ao importar competidores");
-      }
-
-      const data = await response.json();
       toast.success(
         data.message ||
           `${data.count ?? "Competidores"} importados com sucesso!`
@@ -106,14 +101,69 @@ export function CompetitorImportForm({
         <DialogHeader>
           <DialogTitle>Importar Competidores</DialogTitle>
           <DialogDescription>
-            Envie um arquivo <strong>.csv</strong> com os competidores. O
-            arquivo deve conter as colunas:{" "}
-            <span className="font-mono text-xs">
-              nome, sexo, peso, nascimento, faixa, escola, kumite, kata
-            </span>
-            .
+            Envie um arquivo <strong>.csv</strong> com as colunas abaixo (a
+            primeira linha deve ser o cabeçalho com esses nomes exatos).
           </DialogDescription>
         </DialogHeader>
+
+        <div className="rounded-lg border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+          <ul className="space-y-1">
+            <li>
+              <span className="font-mono font-medium text-foreground">
+                nome
+              </span>{" "}
+              — texto livre
+            </li>
+            <li>
+              <span className="font-mono font-medium text-foreground">
+                sexo
+              </span>{" "}
+              — <span className="font-mono">masculino</span> ou{" "}
+              <span className="font-mono">feminino</span>
+            </li>
+            <li>
+              <span className="font-mono font-medium text-foreground">
+                peso
+              </span>{" "}
+              — número em kg (ex: <span className="font-mono">45.5</span>),
+              obrigatório se kumite = sim
+            </li>
+            <li>
+              <span className="font-mono font-medium text-foreground">
+                nascimento
+              </span>{" "}
+              — data no formato{" "}
+              <span className="font-mono">DD/MM/AAAA</span>
+            </li>
+            <li>
+              <span className="font-mono font-medium text-foreground">
+                faixa
+              </span>{" "}
+              —{" "}
+              <span className="font-mono">
+                branca, azul, amarela, vermelha, laranja, verde, roxa, marrom
+                ou preta
+              </span>
+            </li>
+            <li>
+              <span className="font-mono font-medium text-foreground">
+                escola
+              </span>{" "}
+              — texto livre
+            </li>
+            <li>
+              <span className="font-mono font-medium text-foreground">
+                kumite
+              </span>{" "}
+              e{" "}
+              <span className="font-mono font-medium text-foreground">
+                kata
+              </span>{" "}
+              — <span className="font-mono">sim</span> para inscrever (qualquer
+              outro valor conta como não)
+            </li>
+          </ul>
+        </div>
 
         <div className="space-y-4 py-2">
           {/* Drop Zone */}

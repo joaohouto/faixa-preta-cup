@@ -1,48 +1,32 @@
-import { db as prisma } from "@/lib/prisma";
+import { db } from "@/lib/prisma";
 import { NextResponse } from "next/server";
+import { withApiHandler, requireEntity } from "@/lib/api-handler";
 
-export async function GET(
-  req: Request,
-  context: { params: Promise<{ id: string }> }
-) {
-  try {
+export const GET = withApiHandler(
+  "TOURNAMENT_GET",
+  async (req: Request, context: { params: Promise<{ id: string }> }) => {
     const { id: tournamentId } = await context.params;
 
-    const tournament = await prisma.tournament.findFirst({
-      where: { id: tournamentId },
-    });
-
-    if (!tournament) {
-      return NextResponse.json(
-        { error: "Tournament not found" },
-        { status: 404 }
-      );
-    }
+    const tournament = requireEntity(
+      await db.tournament.findFirst({ where: { id: tournamentId } }),
+      "Tournament not found"
+    );
+    if (tournament instanceof Response) return tournament;
 
     return NextResponse.json(tournament);
-  } catch (error) {
-    console.log("[TOURNAMENT_GET]", error);
-    return new NextResponse("Internal Error", { status: 500 });
   }
-}
+);
 
-export async function PUT(
-  req: Request,
-  context: { params: Promise<{ id: string }> }
-) {
-  try {
+export const PUT = withApiHandler(
+  "TOURNAMENT_PUT",
+  async (req: Request, context: { params: Promise<{ id: string }> }) => {
     const { id: tournamentId } = await context.params;
 
-    const tournament = await prisma.tournament.findFirst({
-      where: { id: tournamentId },
-    });
-
-    if (!tournament) {
-      return NextResponse.json(
-        { error: "Tournament not found" },
-        { status: 404 }
-      );
-    }
+    const tournament = requireEntity(
+      await db.tournament.findFirst({ where: { id: tournamentId } }),
+      "Tournament not found"
+    );
+    if (tournament instanceof Response) return tournament;
 
     const body = await req.json();
 
@@ -50,43 +34,30 @@ export async function PUT(
       return NextResponse.json(tournament);
     }
 
-    const updatedTournament = await prisma.tournament.update({
+    const updatedTournament = await db.tournament.update({
       where: { id: tournamentId },
       data: { name: body.name },
     });
 
     return NextResponse.json(updatedTournament);
-  } catch (error) {
-    console.log("[TOURNAMENT_PUT]", error);
-    return new NextResponse("Internal Error", { status: 500 });
   }
-}
+);
 
-export async function DELETE(
-  req: Request,
-  context: { params: Promise<{ id: string }> }
-) {
-  try {
+export const DELETE = withApiHandler(
+  "TOURNAMENT_DELETE",
+  async (req: Request, context: { params: Promise<{ id: string }> }) => {
     const { id: tournamentId } = await context.params;
 
-    const tournament = await prisma.tournament.findFirst({
-      where: { id: tournamentId },
-    });
+    const tournament = requireEntity(
+      await db.tournament.findFirst({ where: { id: tournamentId } }),
+      "Tournament not found"
+    );
+    if (tournament instanceof Response) return tournament;
 
-    if (!tournament) {
-      return NextResponse.json(
-        { error: "Tournament not found" },
-        { status: 404 }
-      );
-    }
-
-    await prisma.tournament.delete({
+    await db.tournament.delete({
       where: { id: tournamentId },
     });
 
     return new NextResponse(null, { status: 204 });
-  } catch (error) {
-    console.log("[TOURNAMENT_DELETE]", error);
-    return new NextResponse("Internal Error", { status: 500 });
   }
-}
+);

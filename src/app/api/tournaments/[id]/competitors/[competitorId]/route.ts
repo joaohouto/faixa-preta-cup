@@ -1,16 +1,15 @@
 import { db } from "@/lib/prisma";
-import {
-  calculateAge,
-  getKataCategory,
-  getKumiteCategory,
-} from "@/lib/utils/classification";
+import { deriveCompetitorCategories } from "@/lib/utils/classification";
 import { NextResponse } from "next/server";
+import { apiError } from "@/lib/api-error";
+import { withApiHandler, requireEntity } from "@/lib/api-handler";
 
-export async function PUT(
-  req: Request,
-  context: { params: Promise<{ id: string; competitorId: string }> }
-) {
-  try {
+export const PUT = withApiHandler(
+  "COMPETITOR_PUT",
+  async (
+    req: Request,
+    context: { params: Promise<{ id: string; competitorId: string }> }
+  ) => {
     const body = await req.json();
     const { competitorId } = await context.params;
 
@@ -19,50 +18,43 @@ export async function PUT(
       birthdate: new Date(body.birthdate),
     };
 
-    const idade = calculateAge(competitorData.birthdate);
-    const categoriaKata = competitorData.kata
-      ? getKataCategory(idade, competitorData.gender, competitorData.belt)
-      : null;
-    const categoriaKumite = competitorData.kumite
-      ? getKumiteCategory(
-          idade,
-          competitorData.gender,
-          competitorData.weight,
-          competitorData.belt
-        )
-      : null;
+    const { age, kataCategory, kumiteCategory } = deriveCompetitorCategories({
+      birthdate: competitorData.birthdate,
+      gender: competitorData.gender,
+      belt: competitorData.belt,
+      weight: competitorData.weight,
+      kata: competitorData.kata,
+      kumite: competitorData.kumite,
+    });
 
     const updatedCompetitor = await db.competitor.update({
       where: { id: competitorId },
       data: {
         ...competitorData,
-        age: idade,
-        kataCategory: categoriaKata,
-        kumiteCategory: categoriaKumite,
+        age,
+        kataCategory,
+        kumiteCategory,
       },
     });
 
     return NextResponse.json(updatedCompetitor);
-  } catch (error) {
-    console.log("[COMPETITOR_PUT]", error);
-    return new NextResponse("Internal Error", { status: 500 });
   }
-}
+);
 
-export async function DELETE(
-  req: Request,
-  context: { params: Promise<{ id: string; competitorId: string }> }
-) {
-  try {
+export const DELETE = withApiHandler(
+  "COMPETITOR_DELETE",
+  async (
+    req: Request,
+    context: { params: Promise<{ id: string; competitorId: string }> }
+  ) => {
     const { id: tournamentId, competitorId } = await context.params;
 
-    const competitor = await db.competitor.findUnique({
-      where: { id: competitorId },
-    });
-
-    if (!competitor || competitor.tournamentId !== tournamentId) {
-      return new NextResponse("Competitor not found", { status: 404 });
-    }
+    const competitor = requireEntity(
+      await db.competitor.findUnique({ where: { id: competitorId } }),
+      "Competitor not found",
+      (c) => c.tournamentId === tournamentId
+    );
+    if (competitor instanceof Response) return competitor;
 
     const matchesWithCompetitor = await db.match.findFirst({
       where: {
@@ -82,10 +74,10 @@ export async function DELETE(
           where: { id: matchesWithCompetitor.bracket.id },
         });
       } else {
-        return new NextResponse(
+        return apiError(
           "Não é possível excluir competidor que está em uma chave já iniciada. Categoria: " +
             matchesWithCompetitor.bracket.category,
-          { status: 400 }
+          400
         );
       }
     }
@@ -95,8 +87,5 @@ export async function DELETE(
     });
 
     return new NextResponse(null, { status: 204 });
-  } catch (error) {
-    console.log("[COMPETITOR_DELETE]", error);
-    return new NextResponse("Internal Error", { status: 500 });
   }
-}
+);

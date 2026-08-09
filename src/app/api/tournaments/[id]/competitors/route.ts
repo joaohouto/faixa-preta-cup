@@ -1,16 +1,11 @@
 import { db } from "@/lib/prisma";
-import {
-  calculateAge,
-  getKataCategory,
-  getKumiteCategory,
-} from "@/lib/utils/classification";
+import { deriveCompetitorCategories } from "@/lib/utils/classification";
 import { NextResponse } from "next/server";
+import { withApiHandler } from "@/lib/api-handler";
 
-export async function POST(
-  req: Request,
-  context: { params: Promise<{ id: string }> }
-) {
-  try {
+export const POST = withApiHandler(
+  "COMPETITORS_POST",
+  async (req: Request, context: { params: Promise<{ id: string }> }) => {
     const { id: tournamentId } = await context.params;
     const body = await req.json();
 
@@ -19,18 +14,14 @@ export async function POST(
       tournamentId,
     };
 
-    const age = calculateAge(new Date(competitorData.birthdate));
-    const kataCategory = competitorData.kata
-      ? getKataCategory(age, competitorData.gender, competitorData.belt)
-      : null;
-    const kumiteCategory = competitorData.kumite
-      ? getKumiteCategory(
-          age,
-          competitorData.gender,
-          competitorData.weight,
-          competitorData.belt
-        )
-      : null;
+    const { age, kataCategory, kumiteCategory } = deriveCompetitorCategories({
+      birthdate: new Date(competitorData.birthdate),
+      gender: competitorData.gender,
+      belt: competitorData.belt,
+      weight: competitorData.weight,
+      kata: competitorData.kata,
+      kumite: competitorData.kumite,
+    });
 
     const competitor = await db.competitor.create({
       data: {
@@ -50,17 +41,12 @@ export async function POST(
     });
 
     return NextResponse.json(competitor);
-  } catch (error) {
-    console.log("[COMPETITORS_POST]", error);
-    return new NextResponse("Internal Error", { status: 500 });
   }
-}
+);
 
-export async function GET(
-  req: Request,
-  context: { params: Promise<{ id: string }> }
-) {
-  try {
+export const GET = withApiHandler(
+  "COMPETITORS_GET",
+  async (req: Request, context: { params: Promise<{ id: string }> }) => {
     const { id: tournamentId } = await context.params;
 
     const competitors = await db.competitor.findMany({
@@ -76,8 +62,5 @@ export async function GET(
     });
 
     return NextResponse.json(competitors);
-  } catch (error) {
-    console.log("[COMPETITORS_GET]", error);
-    return new NextResponse("Internal Error", { status: 500 });
   }
-}
+);

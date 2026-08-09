@@ -36,6 +36,15 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
+import { fetchJson } from "@/lib/api-client";
+import {
+  Empty,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+  EmptyContent,
+} from "@/components/ui/empty";
 
 const tournamentSchema = z.object({
   name: z.string().min(1, "Nome é obrigatório"),
@@ -59,12 +68,12 @@ export default function TournamentsPage() {
 
   async function fetchTournaments() {
     try {
-      const response = await fetch("/api/tournaments");
-      if (!response.ok) throw new Error("Failed to fetch tournaments");
-      const data = await response.json();
+      const data = await fetchJson<Tournament[]>("/api/tournaments");
       setTournaments(data);
     } catch (error) {
-      toast.error("Falha ao carregar campeonatos.");
+      toast.error(
+        error instanceof Error ? error.message : "Falha ao carregar campeonatos."
+      );
     } finally {
       setLoading(false);
     }
@@ -76,15 +85,12 @@ export default function TournamentsPage() {
 
   async function onSubmit(values: z.infer<typeof tournamentSchema>) {
     try {
-      const response = await fetch("/api/tournaments", {
+      const newTournament = await fetchJson<Tournament>("/api/tournaments", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(values),
       });
 
-      if (!response.ok) throw new Error("Failed to create tournament");
-
-      const newTournament = await response.json();
       toast.success("Campeonato criado com sucesso!");
       setOpen(false);
       form.reset();
@@ -92,7 +98,9 @@ export default function TournamentsPage() {
       // Redirecionar para a página de competidores do novo torneio
       router.push(`/app/${newTournament.id}/competitors`);
     } catch (error) {
-      toast.error("Falha ao criar campeonato.");
+      toast.error(
+        error instanceof Error ? error.message : "Falha ao criar campeonato."
+      );
     }
   }
 
@@ -162,18 +170,24 @@ export default function TournamentsPage() {
             </div>
           ) : tournaments.length === 0 ? (
             <Card>
-              <CardContent className="flex flex-col items-center justify-center py-12">
-                <Trophy className="h-12 w-12 text-muted-foreground mb-4" />
-                <p className="text-lg font-medium mb-2">
-                  Nenhum campeonato cadastrado
-                </p>
-                <p className="text-sm text-muted-foreground mb-4">
-                  Crie seu primeiro campeonato para começar
-                </p>
-                <Button onClick={() => setOpen(true)}>
-                  <Plus className="mr-2 h-4 w-4" />
-                  Criar Campeonato
-                </Button>
+              <CardContent className="py-12">
+                <Empty>
+                  <EmptyHeader>
+                    <EmptyMedia variant="icon">
+                      <Trophy />
+                    </EmptyMedia>
+                    <EmptyTitle>Nenhum campeonato cadastrado</EmptyTitle>
+                    <EmptyDescription>
+                      Crie seu primeiro campeonato para começar
+                    </EmptyDescription>
+                  </EmptyHeader>
+                  <EmptyContent>
+                    <Button onClick={() => setOpen(true)}>
+                      <Plus className="mr-2 h-4 w-4" />
+                      Criar Campeonato
+                    </Button>
+                  </EmptyContent>
+                </Empty>
               </CardContent>
             </Card>
           ) : (

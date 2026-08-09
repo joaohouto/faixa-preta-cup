@@ -194,9 +194,6 @@ export default function ScoreboardPage({
               className="flex flex-col items-center justify-center gap-4 sm:gap-6 lg:gap-8 2xl:gap-10"
             >
               <FaixaPretaLogo className="h-12 sm:h-16" />
-              <span className="text-muted-foreground mt-4 text-sm sm:text-base lg:text-lg 2xl:text-3xl tr'acking-wide uppercase">
-                karate.app.br
-              </span>
             </motion.div>
           </motion.div>
         ) : (
@@ -214,7 +211,7 @@ export default function ScoreboardPage({
               {/* AKA */}
               <section
                 className={cn(
-                  "grid grid-cols-[1fr_auto] gap-3 sm:gap-3 lg:gap-4 2xl:gap-6 border-2 p-3 sm:p-4 lg:p-5 2xl:p-8 rounded-2xl bg-card shadow-2xl transition-all duration-300",
+                  "grid grid-cols-[1fr_auto] gap-3 sm:gap-3 lg:gap-4 2xl:gap-6 border-2 p-3 sm:p-4 lg:p-5 2xl:p-8 rounded-2xl bg-card transition-all duration-300",
                   pulseSide === "aka"
                     ? "border-red-500 ring-4 ring-red-400/60 ring-offset-2"
                     : "border-red-500/50",
@@ -258,7 +255,7 @@ export default function ScoreboardPage({
                 {/* AKA score box */}
                 <div
                   className={cn(
-                    "relative bg-red-500 text-white rounded-xl flex items-center justify-center shadow-xl overflow-hidden transition-all duration-300 flex-shrink-0",
+                    "relative bg-red-500 text-white rounded-xl flex items-center justify-center overflow-hidden transition-all duration-300 flex-shrink-0",
                     "size-20 sm:size-28 md:size-36 lg:size-44 xl:size-52 2xl:size-[20rem]",
                     pulseSide === "aka" && "scale-105",
                   )}
@@ -311,7 +308,7 @@ export default function ScoreboardPage({
               {/* AO */}
               <section
                 className={cn(
-                  "grid grid-cols-[auto_1fr] gap-3 sm:gap-3 lg:gap-4 2xl:gap-6 border-2 p-3 sm:p-4 lg:p-5 2xl:p-8 rounded-2xl bg-card shadow-2xl transition-all duration-300",
+                  "grid grid-cols-[auto_1fr] gap-3 sm:gap-3 lg:gap-4 2xl:gap-6 border-2 p-3 sm:p-4 lg:p-5 2xl:p-8 rounded-2xl bg-card  transition-all duration-300",
                   pulseSide === "ao"
                     ? "border-blue-500 ring-4 ring-blue-400/60 ring-offset-2"
                     : "border-blue-500/50",
@@ -320,7 +317,7 @@ export default function ScoreboardPage({
                 {/* AO score box */}
                 <div
                   className={cn(
-                    "relative bg-blue-500 text-white rounded-xl flex items-center justify-center shadow-xl overflow-hidden transition-all duration-300 flex-shrink-0",
+                    "relative bg-blue-500 text-white rounded-xl flex items-center justify-center  overflow-hidden transition-all duration-300 flex-shrink-0",
                     "size-20 sm:size-28 md:size-36 lg:size-44 xl:size-52 2xl:size-[20rem]",
                     pulseSide === "ao" && "scale-105",
                   )}

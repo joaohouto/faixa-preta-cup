@@ -34,6 +34,7 @@ import {
   EmptyTitle,
 } from "./ui/empty";
 import { CompetitorEditDialog } from "./competitor-edit-dialog";
+import { fetchJson } from "@/lib/api-client";
 
 interface CompetitorsListProps {
   tournamentId: string;
@@ -61,16 +62,12 @@ export function CompetitorsList({
 
     setLoading(true);
     try {
-      const response = await fetch(
+      const data = await fetchJson<Competitor[]>(
         `/api/tournaments/${tournamentId}/competitors`
       );
-      if (!response.ok) {
-        throw new Error("Failed to fetch competitors");
-      }
-      const data = await response.json();
       setCompetitors(data);
-    } catch (error) {
-      toast.error("Falha ao carregar competidores.");
+    } catch (error: any) {
+      toast.error(error.message || "Falha ao carregar competidores.");
     } finally {
       setLoading(false);
     }
@@ -88,26 +85,20 @@ export function CompetitorsList({
   async function handleDeleteAll() {
     setIsDeletingAll(true);
     try {
-      const response = await fetch(
+      const data = await fetchJson<{ deletedCount: number }>(
         `/api/tournaments/${tournamentId}/competitors/bulk-delete`,
         {
           method: "DELETE",
         }
       );
 
-      if (!response.ok) {
-        throw new Error("Failed to delete competitors");
-      }
-
-      const data = await response.json();
-
       toast.success(
         `${data.deletedCount} competidor(es) excluído(s) com sucesso!`
       );
       setDeleteAllDialogOpen(false);
       onRefresh();
-    } catch (error) {
-      toast.error("Falha ao excluir competidores.");
+    } catch (error: any) {
+      toast.error(error.message || "Falha ao excluir competidores.");
     } finally {
       setIsDeletingAll(false);
     }

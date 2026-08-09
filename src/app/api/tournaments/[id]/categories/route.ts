@@ -1,6 +1,8 @@
 import { db } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 import { Competitor } from "@prisma/client";
+import { apiError } from "@/lib/api-error";
+import { withApiHandler } from "@/lib/api-handler";
 
 export const dynamic = "force-dynamic";
 
@@ -35,11 +37,9 @@ function groupByCategory(
     }));
 }
 
-export async function GET(
-  req: Request,
-  context: { params: Promise<{ id: string }> }
-) {
-  try {
+export const GET = withApiHandler(
+  "CATEGORIES_GET",
+  async (req: Request, context: { params: Promise<{ id: string }> }) => {
     const { id: tournamentId } = await context.params;
 
     const tournament = await db.tournament.findUnique({
@@ -47,7 +47,7 @@ export async function GET(
     });
 
     if (!tournament) {
-      return new NextResponse("Tournament not found", { status: 404 });
+      return apiError("Tournament not found", 404);
     }
 
     const competitors = await db.competitor.findMany({
@@ -69,8 +69,5 @@ export async function GET(
       kataCategories,
       kumiteCategories,
     });
-  } catch (error) {
-    console.log("[CATEGORIES_GET]", error);
-    return new NextResponse("Internal Error", { status: 500 });
   }
-}
+);

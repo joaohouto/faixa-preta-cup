@@ -18,8 +18,10 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Kbd } from "@/components/ui/kbd";
 import { useHotkeys } from "react-hotkeys-hook";
 import { cn } from "@/lib/utils";
+import { fetchJson } from "@/lib/api-client";
 import { Spinner } from "@/components/luxe/spinner";
 import {
   Select,
@@ -30,6 +32,7 @@ import {
 } from "@/components/ui/select";
 import {
   AlertDialog,
+  AlertDialogAction,
   AlertDialogCancel,
   AlertDialogContent,
   AlertDialogDescription,
@@ -82,7 +85,6 @@ function getMatchTypeLabel(
 ): string {
   if (!bracket) return "";
   if (match.isThirdPlace) return "3º LUGAR";
-  if (match.isFourthPlace) return "4º LUGAR";
   if (match.round === bracket.totalRounds) return "FINAL";
   if (match.round === bracket.totalRounds - 1) return "SEMIFINAL";
   return "";
@@ -130,6 +132,8 @@ function RefereePageContent({
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [showWinnerDialog, setShowWinnerDialog] = useState(false);
+  const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
+  const [woTarget, setWoTarget] = useState<"aka" | "ao" | null>(null);
 
   // Refs for stable broadcast — reads latest values without stale closures
   const liveStateRef = useRef(liveState);
@@ -143,6 +147,8 @@ function RefereePageContent({
   const broadcastAbortRef = useRef<AbortController | null>(null);
   const timerEndAtRef = useRef<number | null>(null);
   const isNavigatingRef = useRef(false);
+  const historyGuardArmedRef = useRef(false);
+  const bypassGuardRef = useRef(false);
 
   // Keep refs in sync
   useEffect(() => {
@@ -179,6 +185,72 @@ function RefereePageContent({
       enableOnContentEditable: true,
     },
   );
+
+  // true se sair agora perderia placar ou timer não salvos
+  function hasMatchProgress() {
+    if (!currentMatchRef.current) return false;
+    const state = liveStateRef.current;
+    return (
+      state.akaScore > 0 ||
+      state.aoScore > 0 ||
+      state.timerRunning ||
+      state.timeRemaining > 0
+    );
+  }
+
+  // Avisa antes de fechar/recarregar a aba com placar ou timer em andamento
+  useEffect(() => {
+    function handleBeforeUnload(e: BeforeUnloadEvent) {
+      if (!hasMatchProgress()) return;
+      e.preventDefault();
+      e.returnValue = "";
+    }
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, []);
+
+  // Bloqueia o botão "voltar" do navegador enquanto há progresso não salvo.
+  // Next.js não expõe um hook de "antes de navegar" para o App Router, então
+  // usamos o truque clássico: empilha uma entrada extra no histórico assim
+  // que há progresso, e todo popstate é interceptado — se ainda há
+  // progresso, a gente reempilha (cancela a navegação) e mostra o dialog;
+  // sem progresso, deixa o back seguir. `goBack`/`requestLeave` sabem lidar
+  // com essa entrada extra (ver `historyGuardArmedRef`).
+  useEffect(() => {
+    function handlePopState() {
+      if (bypassGuardRef.current) return;
+      if (!historyGuardArmedRef.current) return;
+      if (!hasMatchProgress()) {
+        bypassGuardRef.current = true;
+        isNavigatingRef.current = true;
+        router.back();
+        return;
+      }
+      window.history.pushState(null, "", window.location.href);
+      setShowLeaveConfirm(true);
+    }
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    if (
+      (liveState.akaScore > 0 ||
+        liveState.aoScore > 0 ||
+        liveState.timerRunning ||
+        liveState.timeRemaining > 0) &&
+      !historyGuardArmedRef.current
+    ) {
+      window.history.pushState(null, "", window.location.href);
+      historyGuardArmedRef.current = true;
+    }
+  }, [
+    liveState.akaScore,
+    liveState.aoScore,
+    liveState.timerRunning,
+    liveState.timeRemaining,
+  ]);
 
   useEffect(() => {
     if (isNavigatingRef.current) return;
@@ -284,13 +356,12 @@ function RefereePageContent({
       setLoading(true);
       const { tournamentId: tid, bracketId: bid } = routeRef.current;
 
-      const [bracketRes, compRes] = await Promise.all([
-        fetch(`/api/tournaments/${tid}/brackets/${bid}`),
-        fetch(`/api/tournaments/${tid}/competitors`),
+      const [bracketData, competitors] = await Promise.all([
+        fetchJson<Bracket & { matches: Match[] }>(
+          `/api/tournaments/${tid}/brackets/${bid}`,
+        ),
+        fetchJson<Competitor[]>(`/api/tournaments/${tid}/competitors`),
       ]);
-
-      const bracketData = await bracketRes.json();
-      const competitors: Competitor[] = await compRes.json();
       const competitorsMap = new Map(competitors.map((c) => [c.id, c]));
 
       setBracket(bracketData);
@@ -339,9 +410,26 @@ function RefereePageContent({
     }
   }
 
+  // Sai de fato da página. Se o guard de histórico estiver armado (ver
+  // useEffect acima), estamos numa entrada extra empilhada — um único
+  // "back" só consumiria ela, então pula duas casas com `go(-2)`.
   function goBack() {
     isNavigatingRef.current = true;
-    router.back();
+    bypassGuardRef.current = true;
+    if (historyGuardArmedRef.current) {
+      window.history.go(-2);
+    } else {
+      router.back();
+    }
+  }
+
+  // Placar/timer em andamento não devem ser perdidos por um clique sem querer
+  function requestLeave() {
+    if (!hasMatchProgress()) {
+      goBack();
+      return;
+    }
+    setShowLeaveConfirm(true);
   }
 
   async function saveResult() {
@@ -361,28 +449,21 @@ function RefereePageContent({
     await finalizeSave(winnerId, false);
   }
 
-  async function finalizeSave(winnerId: string, hantei: boolean) {
+  async function finalizeResult(winnerId: string, extra: Record<string, unknown>) {
     const match = currentMatchRef.current;
-    const state = liveStateRef.current;
     const { tournamentId: tid, bracketId: bid } = routeRef.current;
     if (!match || !tid) return;
 
     setSaving(true);
     try {
-      const res = await fetch(
+      await fetchJson(
         `/api/tournaments/${tid}/brackets/${bid}/matches/${match.id}`,
         {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            akaScore: state.akaScore,
-            aoScore: state.aoScore,
-            winnerId,
-            decisionByHantei: hantei,
-          }),
+          body: JSON.stringify({ winnerId, ...extra }),
         },
       );
-      if (!res.ok) throw new Error();
 
       const winningSide = winnerId === match.akaId ? "aka" : "ao";
       announcedWinnerRef.current = winningSide;
@@ -392,12 +473,35 @@ function RefereePageContent({
 
       toast.success("Resultado salvo!");
       setShowWinnerDialog(false);
+      setWoTarget(null);
       goBack();
-    } catch {
-      toast.error("Erro ao salvar resultado");
+    } catch (error: any) {
+      toast.error(error.message || "Erro ao salvar resultado");
     } finally {
       setSaving(false);
     }
+  }
+
+  function finalizeSave(winnerId: string, hantei: boolean) {
+    const state = liveStateRef.current;
+    return finalizeResult(winnerId, {
+      akaScore: state.akaScore,
+      aoScore: state.aoScore,
+      decisionByHantei: hantei,
+      akaSenshu: state.akaSenshu,
+      aoSenshu: state.aoSenshu,
+    });
+  }
+
+  // W.O.: os dois competidores estavam escalados, mas um não compareceu.
+  // Diferente do bye (estrutural, decidido na geração da chave), aqui o
+  // árbitro decide na hora, sem placar nenhum.
+  function finalizeWalkover(absentSide: "aka" | "ao") {
+    const match = currentMatchRef.current;
+    if (!match) return;
+    const winnerId = absentSide === "aka" ? match.aoId : match.akaId;
+    if (!winnerId) return;
+    return finalizeResult(winnerId, { isWalkover: true });
   }
 
   function handleTimeChange(value: string) {
@@ -463,7 +567,7 @@ function RefereePageContent({
       <div className="max-w-4xl mx-auto space-y-6">
         {/* Header */}
         <div className="flex items-center justify-between">
-          <Button variant="ghost" size="icon" onClick={goBack}>
+          <Button variant="ghost" size="icon" onClick={requestLeave}>
             <ArrowLeft />
           </Button>
 
@@ -566,6 +670,12 @@ function RefereePageContent({
                 <RotateCcw className="h-6 w-6" />
               </Button>
             </div>
+
+            <div className="flex items-center justify-center gap-4 text-xs text-muted-foreground">
+              <span className="flex items-center gap-1.5">
+                <Kbd>Espaço</Kbd> iniciar/pausar
+              </span>
+            </div>
           </CardContent>
         </Card>
 
@@ -648,6 +758,15 @@ function RefereePageContent({
               >
                 Senshu
               </Button>
+
+              <Button
+                variant="ghost"
+                size="sm"
+                className="w-full text-muted-foreground"
+                onClick={() => setWoTarget("aka")}
+              >
+                Ausente (W.O.)
+              </Button>
             </CardContent>
           </Card>
 
@@ -727,6 +846,15 @@ function RefereePageContent({
                 }
               >
                 Senshu
+              </Button>
+
+              <Button
+                variant="ghost"
+                size="sm"
+                className="w-full text-muted-foreground"
+                onClick={() => setWoTarget("ao")}
+              >
+                Ausente (W.O.)
               </Button>
             </CardContent>
           </Card>
@@ -808,6 +936,54 @@ function RefereePageContent({
           </div>
           <AlertDialogFooter>
             <AlertDialogCancel disabled={saving}>Cancelar</AlertDialogCancel>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={showLeaveConfirm} onOpenChange={setShowLeaveConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Sair da arbitragem?</AlertDialogTitle>
+            <AlertDialogDescription>
+              O placar e o timer desta luta ainda não foram salvos. Se você
+              sair agora, esse progresso será perdido.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Continuar arbitrando</AlertDialogCancel>
+            <AlertDialogAction onClick={goBack}>
+              Sair mesmo assim
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog
+        open={!!woTarget}
+        onOpenChange={(open) => !open && setWoTarget(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Marcar W.O.?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {woTarget === "aka"
+                ? currentMatch?.aka?.name
+                : currentMatch?.ao?.name}{" "}
+              será marcado como ausente.{" "}
+              {woTarget === "aka"
+                ? currentMatch?.ao?.name
+                : currentMatch?.aka?.name}{" "}
+              vence a luta automaticamente, sem placar.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={saving}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => woTarget && finalizeWalkover(woTarget)}
+              disabled={saving}
+            >
+              Confirmar W.O.
+            </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

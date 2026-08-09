@@ -1,11 +1,14 @@
 import { db } from "@/lib/prisma";
 import { NextResponse } from "next/server";
+import { apiError } from "@/lib/api-error";
+import { withApiHandler } from "@/lib/api-handler";
 
-export async function GET(
-  req: Request,
-  context: { params: Promise<{ id: string; bracketId: string }> }
-) {
-  try {
+export const GET = withApiHandler(
+  "NEXT_MATCH_GET",
+  async (
+    req: Request,
+    context: { params: Promise<{ id: string; bracketId: string }> }
+  ) => {
     const { bracketId } = await context.params;
 
     const nextMatch = await db.match.findFirst({
@@ -20,12 +23,9 @@ export async function GET(
     });
 
     if (!nextMatch) {
-      return new NextResponse("No pending matches", { status: 404 });
+      return apiError("No pending matches", 404);
     }
 
     return NextResponse.json(nextMatch);
-  } catch (error) {
-    console.log("[NEXT_MATCH_GET]", error);
-    return new NextResponse("Internal Error", { status: 500 });
   }
-}
+);

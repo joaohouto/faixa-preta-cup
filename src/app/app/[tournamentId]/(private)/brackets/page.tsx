@@ -17,6 +17,13 @@ import {
 import Link from "next/link";
 import { beltLabels, genderLabels } from "@/lib/constants/labels";
 import { cn } from "@/lib/utils";
+import { fetchJson } from "@/lib/api-client";
+import {
+  bracketStatusLabel,
+  bracketStatusBadgeClass,
+  bracketStatusBorderClass,
+} from "@/lib/utils/bracket-status";
+import { useEscBack } from "@/hooks/use-esc-back";
 
 import {
   Card,
@@ -53,6 +60,7 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from "@/components/ui/empty";
+import { Skeleton } from "@/components/ui/skeleton";
 
 interface CategoryGroup {
   category: string;
@@ -62,12 +70,6 @@ interface CategoryGroup {
 
 type BracketWithCount = Bracket & {
   _count?: { matches: number };
-};
-
-const statusLabels: Record<string, string> = {
-  NOT_STARTED: "Não iniciado",
-  IN_PROGRESS: "Em andamento",
-  COMPLETED: "Concluído",
 };
 
 const statusIcons = {
@@ -88,6 +90,7 @@ export default function BracketsPage({
   params: Promise<{ tournamentId: string }>;
 }) {
   const { tournamentId } = use(params);
+  useEscBack();
 
   const [kataCategories, setKataCategories] = useState<CategoryGroup[]>([]);
   const [kumiteCategories, setKumiteCategories] = useState<CategoryGroup[]>([]);
@@ -107,20 +110,21 @@ export default function BracketsPage({
     try {
       setLoading(true);
 
-      const [categoriesRes, bracketsRes] = await Promise.all([
-        fetch(`/api/tournaments/${tournamentId}/categories`),
-        fetch(`/api/tournaments/${tournamentId}/brackets`),
+      const [categoriesData, bracketsData] = await Promise.all([
+        fetchJson<{
+          kataCategories: CategoryGroup[];
+          kumiteCategories: CategoryGroup[];
+        }>(`/api/tournaments/${tournamentId}/categories`),
+        fetchJson<BracketWithCount[]>(
+          `/api/tournaments/${tournamentId}/brackets`,
+        ),
       ]);
-
-      if (!categoriesRes.ok) throw new Error("Failed to fetch categories");
-      if (!bracketsRes.ok) throw new Error("Failed to fetch brackets");
-
-      const categoriesData = await categoriesRes.json();
-      const bracketsData: BracketWithCount[] = await bracketsRes.json();
 
       applyBracketsToCategories(categoriesData, bracketsData);
     } catch (error) {
-      toast.error("Falha ao carregar dados.");
+      toast.error(
+        error instanceof Error ? error.message : "Falha ao carregar dados.",
+      );
     } finally {
       setLoading(false);
     }
@@ -128,11 +132,9 @@ export default function BracketsPage({
 
   async function refreshBrackets() {
     try {
-      const bracketsRes = await fetch(
+      const bracketsData = await fetchJson<BracketWithCount[]>(
         `/api/tournaments/${tournamentId}/brackets`,
       );
-      if (!bracketsRes.ok) throw new Error("Failed to fetch brackets");
-      const bracketsData: BracketWithCount[] = await bracketsRes.json();
 
       setBrackets(bracketsData);
       const bracketsMap = new Map(
@@ -152,7 +154,9 @@ export default function BracketsPage({
         })),
       );
     } catch (error) {
-      toast.error("Falha ao atualizar chaves.");
+      toast.error(
+        error instanceof Error ? error.message : "Falha ao atualizar chaves.",
+      );
     }
   }
 
@@ -186,7 +190,7 @@ export default function BracketsPage({
   async function handleGenerateAll() {
     setGeneratingAll(true);
     try {
-      const res = await fetch(
+      const data = await fetchJson<{ message?: string }>(
         `/api/tournaments/${tournamentId}/brackets`,
         {
           method: "POST",
@@ -195,12 +199,6 @@ export default function BracketsPage({
         },
       );
 
-      if (!res.ok) {
-        const text = await res.text();
-        throw new Error(text || "Erro ao gerar chaves");
-      }
-
-      const data = await res.json();
       toast.success(data.message || "Chaves geradas com sucesso!");
       setConfirmGenerateAll(false);
       await refreshBrackets();
@@ -214,19 +212,11 @@ export default function BracketsPage({
   async function handleGenerateSingle(category: string, modality: string) {
     setActionLoading(category);
     try {
-      const res = await fetch(
-        `/api/tournaments/${tournamentId}/brackets`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ category, modality }),
-        },
-      );
-
-      if (!res.ok) {
-        const text = await res.text();
-        throw new Error(text || "Erro ao gerar chave");
-      }
+      await fetchJson(`/api/tournaments/${tournamentId}/brackets`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ category, modality }),
+      });
 
       toast.success("Chave gerada com sucesso!");
       await refreshBrackets();
@@ -251,12 +241,10 @@ export default function BracketsPage({
     setDeleteTarget(null);
 
     try {
-      const res = await fetch(
+      await fetchJson(
         `/api/tournaments/${tournamentId}/brackets/${bracketId}`,
         { method: "DELETE" },
       );
-
-      if (!res.ok) throw new Error("Falha ao excluir chave");
 
       toast.success("Chave excluída com sucesso!");
 
@@ -274,8 +262,8 @@ export default function BracketsPage({
           cat.bracket?.id === bracketId ? { ...cat, bracket: undefined } : cat,
         ),
       );
-    } catch (error) {
-      toast.error("Erro ao excluir chave");
+    } catch (error: any) {
+      toast.error(error.message || "Erro ao excluir chave");
     } finally {
       setActionLoading(null);
     }
@@ -284,9 +272,9 @@ export default function BracketsPage({
   if (loading) {
     return (
       <div className="container mx-auto p-6">
-        <div className="animate-pulse space-y-4">
-          <div className="h-8 bg-muted rounded-xl w-1/4" />
-          <div className="h-4 bg-muted rounded-xl w-1/3" />
+        <div className="space-y-4">
+          <Skeleton className="h-8 w-1/4" />
+          <Skeleton className="h-4 w-1/3" />
         </div>
       </div>
     );
@@ -310,9 +298,10 @@ export default function BracketsPage({
       <div className="mb-6 flex items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold">Chaves e Categorias</h1>
-          <div className="flex items-center gap-3 mt-1.5 print:hidden">
+          <div className="flex items-center flex-wrap gap-x-3 gap-y-1 mt-1.5 print:hidden">
             <span className="text-sm text-muted-foreground">
-              {totalCategories} categorias · {stats.totalBrackets} chaves geradas
+              {totalCategories} categorias · {stats.totalBrackets} chaves
+              geradas
             </span>
             {stats.inProgress > 0 && (
               <span className="inline-flex items-center gap-1 text-xs text-blue-600 dark:text-blue-400">
@@ -507,9 +496,9 @@ export default function BracketsPage({
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
             <AlertDialogAction
               onClick={handleDeleteBracketConfirm}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              className="bg-destructive text-background hover:bg-destructive/90"
             >
-              <Trash2 className="h-4 w-4" />
+              <Trash2 />
               Excluir
             </AlertDialogAction>
           </AlertDialogFooter>
@@ -538,24 +527,27 @@ function CategoryCard({
   const StatusIcon = group.bracket ? statusIcons[group.bracket.status] : Clock;
 
   return (
-    <Card id={group.bracket ? `bracket-${group.bracket.id}` : undefined}>
+    <Card
+      id={group.bracket ? `bracket-${group.bracket.id}` : undefined}
+      className={cn(
+        "border-l-4",
+        bracketStatusBorderClass[group.bracket?.status ?? "NOT_STARTED"],
+      )}
+    >
       <CardHeader>
-        <div className="flex items-start justify-between gap-4">
-          <div className="flex-1">
-            <CardTitle className="flex items-center gap-2 mb-2">
-              <span className="font-mono text-lg">{group.category}</span>
+        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+          <div className="flex-1 min-w-0">
+            <CardTitle className="flex items-center flex-wrap gap-2 mb-2">
+              <span className="font-mono text-lg break-all">
+                {group.category}
+              </span>
 
               {group.bracket && (
                 <Badge
                   variant="outline"
                   className={cn(
                     "flex items-center gap-1 print:hidden",
-                    group.bracket.status === "NOT_STARTED" &&
-                      "text-muted-foreground",
-                    group.bracket.status === "IN_PROGRESS" &&
-                      "border-blue-500/40 bg-blue-500/10 text-blue-600 dark:text-blue-400",
-                    group.bracket.status === "COMPLETED" &&
-                      "border-green-500/40 bg-green-500/10 text-green-600 dark:text-green-400",
+                    bracketStatusBadgeClass[group.bracket.status],
                   )}
                 >
                   <StatusIcon
@@ -564,7 +556,7 @@ function CategoryCard({
                       group.bracket.status === "IN_PROGRESS" && "animate-pulse",
                     )}
                   />
-                  {statusLabels[group.bracket.status]}
+                  {bracketStatusLabel[group.bracket.status]}
                 </Badge>
               )}
             </CardTitle>
@@ -574,14 +566,15 @@ function CategoryCard({
             </CardDescription>
           </div>
 
-          <div className="flex items-center gap-2 print:hidden">
+          <div className="flex items-center gap-2 print:hidden shrink-0">
             {group.bracket ? (
               <>
                 {/* Ver Chave */}
                 <Link
                   href={`/app/${tournamentId}/brackets/${group.bracket.id}`}
+                  className="flex-1 sm:flex-none"
                 >
-                  <Button size="sm" variant="outline">
+                  <Button variant="outline" className="w-full">
                     <Eye />
                     Ver Chave
                   </Button>
@@ -595,7 +588,7 @@ function CategoryCard({
                     onDeleteBracket(group.bracket!.id, group.category)
                   }
                   disabled={isLoading}
-                  className="text-destructive border-destructive/30 hover:bg-destructive/10 hover:border-destructive/60"
+                  className="text-destructive border-destructive/30 hover:bg-destructive/10 hover:border-destructive/60 shrink-0"
                 >
                   {isLoading ? (
                     <Loader2 className="animate-spin" />
@@ -607,10 +600,10 @@ function CategoryCard({
             ) : (
               /* Gerar Chave */
               <Button
-                size="sm"
                 variant="outline"
                 onClick={() => onGenerateBracket(group.category, modality)}
                 disabled={isLoading || group.competitors.length < 2}
+                className="w-full sm:w-auto"
               >
                 {isLoading ? (
                   <>
@@ -630,26 +623,44 @@ function CategoryCard({
       </CardHeader>
 
       <CardContent>
-        <div className="rounded-md border">
-          <Table>
+        {/* Mobile: lista empilhada — a tabela alinhada não cabe numa tela estreita */}
+        <div className="sm:hidden rounded-md border divide-y">
+          {group.competitors.map((competitor) => (
+            <div key={competitor.id} className="p-3">
+              <p className="font-medium">{competitor.name}</p>
+              <p className="text-sm text-muted-foreground mt-0.5">
+                {genderLabels[competitor.gender]} · {competitor.age} anos
+                {modality === "KUMITE" &&
+                  ` · ${competitor.weight ? `${competitor.weight} kg` : "peso —"}`}
+                {" · "}
+                {beltLabels[competitor.belt]}
+              </p>
+              <p className="text-sm text-muted-foreground truncate">
+                {competitor.school}
+              </p>
+            </div>
+          ))}
+        </div>
+
+        {/* Desktop: tabela com colunas alinhadas entre os cards */}
+        <div className="hidden sm:block rounded-md border">
+          <Table className="table-fixed">
             <TableHeader>
               <TableRow>
-                <TableHead className="w-12">#</TableHead>
-                <TableHead>Nome</TableHead>
-                <TableHead>Sexo</TableHead>
-                <TableHead>Idade</TableHead>
-                {modality === "KUMITE" && <TableHead>Peso</TableHead>}
-                <TableHead>Faixa</TableHead>
+                <TableHead className="w-[30%]">Nome</TableHead>
+                <TableHead className="w-24">Sexo</TableHead>
+                <TableHead className="w-20">Idade</TableHead>
+                {modality === "KUMITE" && (
+                  <TableHead className="w-20">Peso</TableHead>
+                )}
+                <TableHead className="w-28">Faixa</TableHead>
                 <TableHead>Escola</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {group.competitors.map((competitor, index) => (
+              {group.competitors.map((competitor) => (
                 <TableRow key={competitor.id}>
-                  <TableCell className="font-medium text-muted-foreground">
-                    {index + 1}
-                  </TableCell>
-                  <TableCell className="font-medium">
+                  <TableCell className="font-medium truncate">
                     {competitor.name}
                   </TableCell>
                   <TableCell>{genderLabels[competitor.gender]}</TableCell>
@@ -660,7 +671,7 @@ function CategoryCard({
                     </TableCell>
                   )}
                   <TableCell>{beltLabels[competitor.belt]}</TableCell>
-                  <TableCell className="text-muted-foreground">
+                  <TableCell className="text-muted-foreground truncate">
                     {competitor.school}
                   </TableCell>
                 </TableRow>

@@ -159,3 +159,22 @@ export function validateKumiteRegistration(
     throw new Error("Peso é obrigatório para inscrição em Kumite");
   }
 }
+
+export function deriveCompetitorCategories(input: {
+  birthdate: Date;
+  gender: Gender;
+  belt: Belt;
+  weight: number | null;
+  kata: boolean;
+  kumite: boolean;
+}): { age: number; kataCategory: string | null; kumiteCategory: string | null } {
+  const age = calculateAge(input.birthdate);
+  const kataCategory = input.kata
+    ? getKataCategory(age, input.gender, input.belt)
+    : null;
+  const kumiteCategory = input.kumite
+    ? getKumiteCategory(age, input.gender, input.weight, input.belt)
+    : null;
+
+  return { age, kataCategory, kumiteCategory };
+}

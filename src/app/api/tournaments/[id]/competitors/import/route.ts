@@ -2,12 +2,10 @@ import { db } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 import Papa from "papaparse";
 import { z } from "zod";
-import {
-  calculateAge,
-  getKataCategory,
-  getKumiteCategory,
-} from "@/lib/utils/classification";
+import { deriveCompetitorCategories } from "@/lib/utils/classification";
 import { beltMapping, genderMapping } from "@/lib/constants/labels";
+import { apiError } from "@/lib/api-error";
+import { withApiHandler } from "@/lib/api-handler";
 
 const competitorSchema = z.object({
   nome: z.string().min(1),
@@ -20,18 +18,16 @@ const competitorSchema = z.object({
   kata: z.string().min(1),
 });
 
-export async function POST(
-  req: Request,
-  context: { params: Promise<{ id: string }> }
-) {
-  try {
+export const POST = withApiHandler(
+  "COMPETITORS_IMPORT_POST",
+  async (req: Request, context: { params: Promise<{ id: string }> }) => {
     const { id: tournamentId } = await context.params;
 
     const formData = await req.formData();
     const file = formData.get("file") as File;
 
     if (!file) {
-      return new NextResponse("No file uploaded", { status: 400 });
+      return apiError("No file uploaded", 400);
     }
 
     const csv = await file.text();
@@ -57,7 +53,6 @@ export async function POST(
         parseInt(birthdateParts[1]) - 1,
         parseInt(birthdateParts[0])
       );
-      const age = calculateAge(birthdate);
       const belt = beltMapping[row.faixa.toLowerCase()];
       const gender = genderMapping[row.sexo.toLowerCase()];
       const weight = row.peso ? parseFloat(row.peso.replace(" kg", "")) : null;
@@ -65,10 +60,9 @@ export async function POST(
       const kata = row.kata.toLowerCase() === "sim";
       const kumite = row.kumite.toLowerCase() === "sim";
 
-      const kataCategory = kata ? getKataCategory(age, gender, belt) : null;
-      const kumiteCategory = kumite
-        ? getKumiteCategory(age, gender, weight, belt)
-        : null;
+      const { age, kataCategory, kumiteCategory } = deriveCompetitorCategories(
+        { birthdate, gender, belt, weight, kata, kumite }
+      );
 
       return {
         name: row.nome,
@@ -91,8 +85,5 @@ export async function POST(
     });
 
     return NextResponse.json({ success: true });
-  } catch (error) {
-    console.log("[COMPETITORS_IMPORT_POST]", error);
-    return new NextResponse("Internal Error", { status: 500 });
   }
-}
+);

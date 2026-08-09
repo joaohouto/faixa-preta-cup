@@ -8,12 +8,17 @@ import { Card, CardContent } from "@/components/ui/card";
 import { CompetitorForm } from "@/components/competitor-form";
 import { CompetitorsList } from "@/components/competitors-list";
 import { CompetitorImportForm } from "@/components/competitor-import-form";
+import { useEscBack } from "@/hooks/use-esc-back";
+import { Skeleton } from "@/components/ui/skeleton";
+import { fetchJson } from "@/lib/api-client";
 
 interface CompetitorsPageProps {
   params: Promise<{ tournamentId: string }>;
 }
 
 export default function CompetitorsPage({ params }: CompetitorsPageProps) {
+  useEscBack();
+
   const [tournamentId, setTournamentId] = useState<string>("");
   const [tournament, setTournament] = useState<Tournament | null>(null);
   const [loading, setLoading] = useState(true);
@@ -30,12 +35,14 @@ export default function CompetitorsPage({ params }: CompetitorsPageProps) {
 
     async function fetchTournament() {
       try {
-        const response = await fetch(`/api/tournaments/${tournamentId}`);
-        if (!response.ok) throw new Error("Tournament not found");
-        const data = await response.json();
+        const data = await fetchJson<Tournament>(
+          `/api/tournaments/${tournamentId}`
+        );
         setTournament(data);
       } catch (error) {
-        toast.error("Falha ao carregar campeonato.");
+        toast.error(
+          error instanceof Error ? error.message : "Falha ao carregar campeonato."
+        );
       } finally {
         setLoading(false);
       }
@@ -51,9 +58,9 @@ export default function CompetitorsPage({ params }: CompetitorsPageProps) {
   if (loading) {
     return (
       <div className="container mx-auto p-6">
-        <div className="animate-pulse space-y-4">
-          <div className="h-8 bg-muted rounded-xl w-1/4" />
-          <div className="h-4 bg-muted rounded-xl w-1/3" />
+        <div className="space-y-4">
+          <Skeleton className="h-8 w-1/4" />
+          <Skeleton className="h-4 w-1/3" />
         </div>
       </div>
     );

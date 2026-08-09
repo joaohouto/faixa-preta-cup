@@ -1,5 +1,6 @@
 import { NextRequest } from "next/server";
 import { db } from "@/lib/prisma";
+import { apiError } from "@/lib/api-error";
 
 export const dynamic = "force-dynamic";
 
@@ -8,7 +9,7 @@ export async function GET(req: NextRequest) {
   const tournamentId = searchParams.get("tournamentId");
 
   if (!tournamentId) {
-    return new Response("Tournament ID required", { status: 400 });
+    return apiError("Tournament ID required", 400);
   }
 
   const encoder = new TextEncoder();

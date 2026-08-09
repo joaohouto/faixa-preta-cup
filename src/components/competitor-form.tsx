@@ -38,6 +38,7 @@ import {
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
+import { fetchJson } from "@/lib/api-client";
 
 interface CompetitorFormProps {
   tournamentId: string;
@@ -68,27 +69,20 @@ export function CompetitorForm({
   async function onSubmit(values: CompetitorFormValues) {
     setIsSubmitting(true);
     try {
-      const response = await fetch(
-        `/api/tournaments/${tournamentId}/competitors`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(values),
-        }
-      );
-
-      if (!response.ok) {
-        throw new Error("Falha ao registrar competidor");
-      }
+      await fetchJson(`/api/tournaments/${tournamentId}/competitors`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(values),
+      });
 
       toast.success("Competidor registrado com sucesso!");
       form.reset();
       setOpen(false);
       onCompetitorCreated();
-    } catch (error) {
-      toast.error("Falha ao registrar competidor.");
+    } catch (error: any) {
+      toast.error(error.message || "Falha ao registrar competidor.");
     } finally {
       setIsSubmitting(false);
     }
