@@ -10,7 +10,7 @@ WORKDIR /app
 RUN corepack enable pnpm
 
 # Copia os arquivos de dependência primeiro para aproveitar o cache do Docker
-COPY package.json pnpm-lock.yaml ./
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml* ./
 COPY prisma ./prisma
 
 # Instala as dependências (o pnpm gerencia os symlinks internamente aqui).
