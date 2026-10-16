@@ -5,7 +5,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { Belt, Gender } from "@prisma/client";
 import { useForm } from "react-hook-form";
 import type { Resolver } from "react-hook-form";
-import { Loader2 } from "lucide-react";
+import { Spinner } from "@/components/luxe/spinner";
 
 import { beltLabels, genderLabels } from "@/lib/constants/labels";
 import {
@@ -253,7 +253,7 @@ export function CompetitorForm({
               <Button type="submit" className="flex-1" disabled={isSubmitting}>
                 {isSubmitting ? (
                   <>
-                    <Loader2 className="animate-spin" />
+                    <Spinner size="size-4" className="mr-2" />
                     Registrando...
                   </>
                 ) : (

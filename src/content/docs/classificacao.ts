@@ -1,7 +1,7 @@
 export const classificacaoContent = `
 ## Como a categoria é calculada
 
-A categoria de um competidor **não é escolhida manualmente** — ela é calculada automaticamente a partir de idade, sexo, faixa e (para Kumite) peso, no momento do cadastro ou da importação por CSV. A lógica vive em \`src/lib/utils/classification.ts\`.
+A categoria de um competidor é calculada automaticamente a partir de idade, sexo, faixa e (para Kumite) peso, no momento do cadastro ou da importação por CSV.
 
 ## Nível de faixa
 

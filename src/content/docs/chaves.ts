@@ -1,7 +1,7 @@
 export const chavesContent = `
 ## Geração de chaves
 
-As chaves são de **eliminação simples** (sem repescagem), geradas por categoria e modalidade a partir dos competidores já classificados. A lógica vive em \`src/lib/utils/bracket-generator.ts\`.
+As chaves são de **eliminação simples** (sem repescagem), geradas por categoria e modalidade a partir dos competidores já classificados.
 
 ## Tamanho da chave e byes
 

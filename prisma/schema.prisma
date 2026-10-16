@@ -5,7 +5,6 @@ datasource db {
 
 generator client {
   provider = "prisma-client-js"
-  output   = "../node_modules/.prisma/client"
 }
 
 enum Gender {
@@ -164,4 +163,19 @@ model LiveMatch {
   updatedAt DateTime @updatedAt
 
   @@index([matchId])
+}
+
+model RefereeLock {
+  id            String   @id @default(cuid())
+  bracketId     String   @unique
+  tournamentId  String
+  matchId       String?
+  clientId      String
+  deviceInfo    String?
+  acquiredAt    DateTime @default(now())
+  lastHeartbeat DateTime @default(now())
+  expiresAt     DateTime
+
+  @@index([tournamentId])
+  @@index([expiresAt])
 }

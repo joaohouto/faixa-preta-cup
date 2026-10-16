@@ -94,7 +94,7 @@ export function DocsContent() {
 
   return (
     <Tabs defaultValue="classificacao">
-      <TabsList className="h-auto flex-wrap">
+      <TabsList className="h-auto flex-wrap mb-8">
         {sections.map((section) => (
           <TabsTrigger key={section.value} value={section.value}>
             <section.icon className="size-3.5" />

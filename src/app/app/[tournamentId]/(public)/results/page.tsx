@@ -117,9 +117,9 @@ export default function ResultsPage({
     fetchResults();
   }, [fetchResults]);
 
-  // Auto-refresh every 60s
+  // Auto-refresh every 5s
   useEffect(() => {
-    const interval = setInterval(() => fetchResults(), 60_000);
+    const interval = setInterval(() => fetchResults(), 5_000);
     return () => clearInterval(interval);
   }, [fetchResults]);
 

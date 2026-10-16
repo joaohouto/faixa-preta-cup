@@ -4,6 +4,7 @@ import {
   File,
   FileTextIcon,
   LayersIcon,
+  Network,
   Presentation,
   Trophy,
   UsersIcon,
@@ -70,14 +71,14 @@ export function Header({
   const tournamentLinks = currentTournamentId
     ? [
         {
+          href: `/app/${currentTournamentId}/brackets`,
+          label: "Categorias e Chaves",
+          icon: Network,
+        },
+        {
           href: `/app/${currentTournamentId}/competitors`,
           label: "Competidores",
           icon: UsersIcon,
-        },
-        {
-          href: `/app/${currentTournamentId}/brackets`,
-          label: "Categorias e Chaves",
-          icon: LayersIcon,
         },
         {
           href: `/app/${currentTournamentId}/results`,

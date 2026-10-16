@@ -188,6 +188,28 @@ export const GET = withApiHandler(
       orderBy: [{ modality: "asc" }, { category: "asc" }],
     });
 
-    return NextResponse.json(brackets);
+    const now = new Date();
+    const activeLocks = await db.refereeLock.findMany({
+      where: {
+        tournamentId,
+        expiresAt: { gt: now },
+      },
+      select: {
+        bracketId: true,
+        matchId: true,
+      },
+    });
+
+    const lockByBracket = new Map(
+      activeLocks.map((l) => [l.bracketId, l.matchId])
+    );
+
+    const bracketsWithLock = brackets.map((b) => ({
+      ...b,
+      refereeActive: lockByBracket.has(b.id),
+      activeMatchId: lockByBracket.get(b.id) || null,
+    }));
+
+    return NextResponse.json(bracketsWithLock);
   }
 );

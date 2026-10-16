@@ -2,7 +2,7 @@
 
 import { Competitor } from "@prisma/client";
 import { useEffect, useState } from "react";
-import { FolderOpen, Loader2, Trash2 } from "lucide-react";
+import { FolderOpen, Trash2 } from "lucide-react";
 
 import {
   Table,
@@ -238,7 +238,7 @@ export function CompetitorsList({
             >
               {isDeletingAll ? (
                 <>
-                  <Loader2 className="animate-spin" />
+                  <Spinner size="size-4" className="mr-2" />
                   Excluindo...
                 </>
               ) : (

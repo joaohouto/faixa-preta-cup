@@ -72,7 +72,9 @@ export default function TournamentsPage() {
       setTournaments(data);
     } catch (error) {
       toast.error(
-        error instanceof Error ? error.message : "Falha ao carregar campeonatos."
+        error instanceof Error
+          ? error.message
+          : "Falha ao carregar campeonatos.",
       );
     } finally {
       setLoading(false);
@@ -99,7 +101,7 @@ export default function TournamentsPage() {
       router.push(`/app/${newTournament.id}/competitors`);
     } catch (error) {
       toast.error(
-        error instanceof Error ? error.message : "Falha ao criar campeonato."
+        error instanceof Error ? error.message : "Falha ao criar campeonato.",
       );
     }
   }
@@ -109,53 +111,54 @@ export default function TournamentsPage() {
       <Header currentTournamentId={tournamentId} />
       <main className="flex-1">
         <div className="container mx-auto p-6 max-w-4xl">
-          <div className="flex items-center justify-between mb-6">
-            <div>
-              <h1 className="text-3xl font-bold">Campeonatos</h1>
-              <p className="text-muted-foreground">
+          <div className="flex flex-col mb-6">
+            <h1 className="text-3xl font-bold">Campeonatos</h1>
+            <div className="flex items-center flex-wrap gap-x-3 gap-y-1 mt-1.5 print:hidden">
+              <span className="text-sm text-muted-foreground">
                 Gerencie seus torneios de Karatê Shotokan
-              </p>
+              </span>
             </div>
-            <Dialog open={open} onOpenChange={setOpen}>
-              <DialogTrigger asChild>
-                <Button>
-                  <Plus className="mr-2 h-4 w-4" />
-                  Novo Campeonato
-                </Button>
-              </DialogTrigger>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>Criar Novo Campeonato</DialogTitle>
-                </DialogHeader>
-                <Form {...form}>
-                  <form
-                    onSubmit={form.handleSubmit(onSubmit)}
-                    className="space-y-4"
-                  >
-                    <FormField
-                      control={form.control}
-                      name="name"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Nome do Campeonato</FormLabel>
-                          <FormControl>
-                            <Input
-                              placeholder="Ex: Copa Nacional de Karatê 2025"
-                              {...field}
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <Button type="submit" className="w-full">
-                      Criar
-                    </Button>
-                  </form>
-                </Form>
-              </DialogContent>
-            </Dialog>
           </div>
+
+          <Dialog open={open} onOpenChange={setOpen}>
+            <DialogTrigger asChild>
+              <Button className="mb-6">
+                <Plus />
+                Novo Campeonato
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Criar Novo Campeonato</DialogTitle>
+              </DialogHeader>
+              <Form {...form}>
+                <form
+                  onSubmit={form.handleSubmit(onSubmit)}
+                  className="space-y-4"
+                >
+                  <FormField
+                    control={form.control}
+                    name="name"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Nome do Campeonato</FormLabel>
+                        <FormControl>
+                          <Input
+                            placeholder="Ex: Copa Nacional de Karatê 2025"
+                            {...field}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <Button type="submit" className="w-full">
+                    Criar
+                  </Button>
+                </form>
+              </Form>
+            </DialogContent>
+          </Dialog>
 
           {loading ? (
             <div className="grid gap-4 md:grid-cols-2">
@@ -196,9 +199,7 @@ export default function TournamentsPage() {
                 <Card
                   key={tournament.id}
                   className="hover:shadow-lg transition-shadow cursor-pointer"
-                  onClick={() =>
-                    router.push(`/app/${tournament.id}/competitors`)
-                  }
+                  onClick={() => router.push(`/app/${tournament.id}/brackets`)}
                 >
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2">
@@ -208,7 +209,7 @@ export default function TournamentsPage() {
                     <CardDescription>
                       Criado em{" "}
                       {new Date(tournament.createdAt).toLocaleDateString(
-                        "pt-BR"
+                        "pt-BR",
                       )}
                     </CardDescription>
                   </CardHeader>

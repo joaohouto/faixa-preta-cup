@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Match, Bracket, Competitor } from "@prisma/client";
 import { toast } from "sonner";
-import { ArrowLeft, Clock } from "lucide-react";
+import { ArrowLeft, Clock, Lock } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
@@ -41,6 +41,8 @@ export default function BracketDetailPage({
 
   const [bracket, setBracket] = useState<BracketWithMatches | null>(null);
   const [loading, setLoading] = useState(true);
+  const [refereeActive, setRefereeActive] = useState(false);
+  const [activeMatchId, setActiveMatchId] = useState<string | null>(null);
   const [resolvedParams, setResolvedParams] = useState<{
     tournamentId: string;
     bracketId: string;
@@ -69,7 +71,11 @@ export default function BracketDetailPage({
     const interval = setInterval(refreshMatches, 5000);
     return () => clearInterval(interval);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [resolvedParams?.tournamentId, resolvedParams?.bracketId, bracket?.status]);
+  }, [
+    resolvedParams?.tournamentId,
+    resolvedParams?.bracketId,
+    bracket?.status,
+  ]);
 
   function attachCompetitors(data: Bracket & { matches: Match[] }) {
     const competitorsMap = competitorsMapRef.current;
@@ -82,20 +88,40 @@ export default function BracketDetailPage({
     return { ...data, matches: matchesWithComps };
   }
 
+  async function checkRefereeLock() {
+    if (!resolvedParams) return;
+    try {
+      const lockData = await fetchJson<{
+        isLocked: boolean;
+        lock?: { matchId?: string | null } | null;
+      }>(
+        `/api/tournaments/${resolvedParams.tournamentId}/brackets/${resolvedParams.bracketId}/referee-lock`,
+      );
+      setRefereeActive(lockData.isLocked);
+      setActiveMatchId(
+        lockData.isLocked ? lockData.lock?.matchId || null : null,
+      );
+    } catch {
+      // silencioso
+    }
+  }
+
   async function fetchData() {
     try {
       setLoading(true);
 
-      const data = await fetchJson<Bracket & { matches: Match[] }>(
-        `/api/tournaments/${resolvedParams!.tournamentId}/brackets/${resolvedParams!.bracketId}`,
-      );
+      const [data, competitors] = await Promise.all([
+        fetchJson<Bracket & { matches: Match[] }>(
+          `/api/tournaments/${resolvedParams!.tournamentId}/brackets/${resolvedParams!.bracketId}`,
+        ),
+        fetchJson<Competitor[]>(
+          `/api/tournaments/${resolvedParams!.tournamentId}/competitors`,
+        ),
+      ]);
 
-      const competitors = await fetchJson<Competitor[]>(
-        `/api/tournaments/${resolvedParams!.tournamentId}/competitors`,
-      );
       competitorsMapRef.current = new Map(competitors.map((c) => [c.id, c]));
-
       setBracket(attachCompetitors(data));
+      await checkRefereeLock();
     } catch (err) {
       toast.error(
         err instanceof Error ? err.message : "Erro ao carregar chave e lutas.",
@@ -108,9 +134,12 @@ export default function BracketDetailPage({
   async function refreshMatches() {
     if (!resolvedParams) return;
     try {
-      const data = await fetchJson<Bracket & { matches: Match[] }>(
-        `/api/tournaments/${resolvedParams.tournamentId}/brackets/${resolvedParams.bracketId}`,
-      );
+      const [data] = await Promise.all([
+        fetchJson<Bracket & { matches: Match[] }>(
+          `/api/tournaments/${resolvedParams.tournamentId}/brackets/${resolvedParams.bracketId}`,
+        ),
+        checkRefereeLock(),
+      ]);
       setBracket(attachCompetitors(data));
     } catch {
       // poll silencioso — falha pontual não precisa de toast
@@ -118,6 +147,7 @@ export default function BracketDetailPage({
   }
 
   function startReferee(matchId: string) {
+    if (bracket?.status === "COMPLETED") return;
     router.push(
       `/app/${resolvedParams!.tournamentId}/brackets/${resolvedParams!.bracketId}/referee?matchId=${matchId}`,
     );
@@ -188,12 +218,6 @@ export default function BracketDetailPage({
             <span className="text-sm text-muted-foreground">
               {bracket.totalSlots} vagas • {bracket.totalRounds} rodadas
             </span>
-            {bracket.status !== "COMPLETED" && (
-              <span className="flex items-center gap-1.5 text-xs text-muted-foreground print:hidden">
-                <span className="size-1.5 rounded-full bg-blue-400 animate-pulse" />
-                acompanhando ao vivo
-              </span>
-            )}
           </div>
         </div>
       </div>
@@ -233,6 +257,8 @@ export default function BracketDetailPage({
                         <div key={match.id} className="h-[128px]">
                           <MatchCard
                             match={match}
+                            isActiveReferee={match.id === activeMatchId}
+                            isBracketCompleted={bracket.status === "COMPLETED"}
                             onStart={() => startReferee(match.id)}
                           />
                         </div>
@@ -264,6 +290,8 @@ export default function BracketDetailPage({
               <div className="flex justify-center">
                 <MatchCard
                   match={thirdPlaceMatch}
+                  isActiveReferee={thirdPlaceMatch.id === activeMatchId}
+                  isBracketCompleted={bracket.status === "COMPLETED"}
                   onStart={() => startReferee(thirdPlaceMatch.id)}
                 />
               </div>
@@ -289,7 +317,12 @@ export default function BracketDetailPage({
               {matchesByRound[roundNum]
                 .filter((m) => !m.isThirdPlace)
                 .map((match, idx) => (
-                  <MatchListRow key={match.id} match={match} index={idx} />
+                  <MatchListRow
+                    key={match.id}
+                    match={match}
+                    index={idx}
+                    isActiveReferee={match.id === activeMatchId}
+                  />
                 ))}
             </CardContent>
           </Card>
@@ -303,7 +336,11 @@ export default function BracketDetailPage({
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <MatchListRow match={thirdPlaceMatch} index={0} />
+              <MatchListRow
+                match={thirdPlaceMatch}
+                index={0}
+                isActiveReferee={thirdPlaceMatch.id === activeMatchId}
+              />
             </CardContent>
           </Card>
         )}
@@ -316,12 +353,21 @@ export default function BracketDetailPage({
 
 function MatchCard({
   match,
+  isActiveReferee = false,
+  isBracketCompleted = false,
   onStart,
 }: {
   match: MatchWithCompetitors;
+  isActiveReferee?: boolean;
+  isBracketCompleted?: boolean;
   onStart: () => void;
 }) {
-  const canStart = match.aka && match.ao && !match.isBye && !match.isCompleted;
+  const canStart =
+    match.aka &&
+    match.ao &&
+    !match.isBye &&
+    !match.isCompleted &&
+    !isBracketCompleted;
   const isCompleted = match.isCompleted;
   const isReady = canStart;
 
@@ -331,13 +377,30 @@ function MatchCard({
         "w-56 p-0 z-10 transition-all",
         match.isBye && "bg-muted/50",
         isCompleted && "border-green-500/40",
-        isReady &&
+        isActiveReferee &&
+          !isCompleted &&
+          "ring-2 ring-amber-500 border-amber-500 shadow-md shadow-amber-500/20 bg-amber-500/5",
+        !isActiveReferee &&
+          isReady &&
           "cursor-pointer hover:shadow-lg hover:scale-105 border-blue-400/60",
         !match.aka && !match.ao && !match.isBye && "opacity-60",
       )}
       onClick={() => isReady && onStart()}
     >
       <CardContent className="p-0 relative">
+        {/* Active referee indicator badge */}
+        {isActiveReferee && !isCompleted && (
+          <div className="absolute -top-3 left-1/2 -translate-x-1/2 z-20">
+            <Badge
+              variant="outline"
+              className="bg-amber-500 text-white dark:text-zinc-950  shadow-sm text-[10px] py-0 px-2 font-semibold flex items-center gap-1"
+            >
+              <Lock className="size-2.5" />
+              Em arbitragem
+            </Badge>
+          </div>
+        )}
+
         {/* Aka */}
         <div
           className={`p-3 h-[64px] border-b ${
@@ -351,19 +414,20 @@ function MatchCard({
               <span className="text-xs text-red-600 font-semibold">AKA</span>
               <span className="text-sm truncate">{match.aka?.name || "—"}</span>
             </div>
-            {match.isCompleted && match.isWalkover ? (
-              match.winnerId !== match.akaId && (
-                <Badge variant="secondary" className="text-[10px] ml-2 shrink-0">
-                  W.O.
-                </Badge>
-              )
-            ) : (
-              match.isCompleted && (
-                <span className="text-sm font-mono ml-2">
-                  {match.akaScore ?? 0}
-                </span>
-              )
-            )}
+            {match.isCompleted && match.isWalkover
+              ? match.winnerId !== match.akaId && (
+                  <Badge
+                    variant="secondary"
+                    className="text-[10px] ml-2 shrink-0"
+                  >
+                    W.O.
+                  </Badge>
+                )
+              : match.isCompleted && (
+                  <span className="text-sm font-mono ml-2">
+                    {match.akaScore ?? 0}
+                  </span>
+                )}
           </div>
           {match.aka && (
             <div className="text-xs text-muted-foreground mt-1 truncate">
@@ -385,19 +449,20 @@ function MatchCard({
               <span className="text-xs text-blue-600 font-semibold">AO</span>
               <span className="text-sm truncate">{match.ao?.name || "—"}</span>
             </div>
-            {match.isCompleted && match.isWalkover ? (
-              match.winnerId !== match.aoId && (
-                <Badge variant="secondary" className="text-[10px] ml-2 shrink-0">
-                  W.O.
-                </Badge>
-              )
-            ) : (
-              match.isCompleted && (
-                <span className="text-sm font-mono ml-2">
-                  {match.aoScore ?? 0}
-                </span>
-              )
-            )}
+            {match.isCompleted && match.isWalkover
+              ? match.winnerId !== match.aoId && (
+                  <Badge
+                    variant="secondary"
+                    className="text-[10px] ml-2 shrink-0"
+                  >
+                    W.O.
+                  </Badge>
+                )
+              : match.isCompleted && (
+                  <span className="text-sm font-mono ml-2">
+                    {match.aoScore ?? 0}
+                  </span>
+                )}
           </div>
           {match.ao && (
             <div className="text-xs text-muted-foreground mt-1 truncate">
@@ -414,7 +479,7 @@ function MatchCard({
         )}
 
         {/* Ready indicator */}
-        {isReady && (
+        {!isActiveReferee && isReady && (
           <div className="absolute top-2 right-2">
             <div className="h-2 w-2 bg-blue-500 rounded-full animate-pulse" />
           </div>
@@ -429,15 +494,19 @@ function MatchCard({
 function MatchListRow({
   match,
   index,
+  isActiveReferee = false,
 }: {
   match: MatchWithCompetitors;
   index: number;
+  isActiveReferee?: boolean;
 }) {
   return (
     <div
       className={cn(
-        "flex items-center justify-between p-3 border rounded-lg gap-4",
+        "flex items-center justify-between p-3 border rounded-lg gap-4 transition-all",
         match.isCompleted && completedRowClass,
+        isActiveReferee &&
+          "border-amber-500 ring-1 ring-amber-500/50 bg-amber-500/5",
       )}
     >
       <div className="flex items-center gap-4 flex-1 min-w-0">
@@ -479,7 +548,15 @@ function MatchListRow({
       </div>
 
       <div className="flex items-center gap-2 shrink-0">
-        {match.isBye ? (
+        {isActiveReferee ? (
+          <Badge
+            variant="outline"
+            className="text-amber-600 dark:text-amber-400 border-amber-500/40 bg-amber-500/10 gap-1 text-xs animate-pulse font-medium"
+          >
+            <Lock className="size-3" />
+            Em arbitragem
+          </Badge>
+        ) : match.isBye ? (
           <Badge variant="secondary">BYE</Badge>
         ) : match.isWalkover ? (
           <Badge variant="secondary">W.O.</Badge>

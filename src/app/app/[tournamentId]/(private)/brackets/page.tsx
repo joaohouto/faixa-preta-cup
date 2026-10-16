@@ -6,14 +6,15 @@ import { toast } from "sonner";
 import {
   Trophy,
   Zap,
-  Loader2,
   Trash2,
   Eye,
   CheckCircle2,
   Clock,
   Activity,
   AlertTriangle,
+  Lock,
 } from "lucide-react";
+import { Spinner } from "@/components/luxe/spinner";
 import Link from "next/link";
 import { beltLabels, genderLabels } from "@/lib/constants/labels";
 import { cn } from "@/lib/utils";
@@ -24,6 +25,7 @@ import {
   bracketStatusBorderClass,
 } from "@/lib/utils/bracket-status";
 import { useEscBack } from "@/hooks/use-esc-back";
+import { RefereeConnectDialog } from "@/components/referee-connect-dialog";
 
 import {
   Card,
@@ -65,11 +67,13 @@ import { Skeleton } from "@/components/ui/skeleton";
 interface CategoryGroup {
   category: string;
   competitors: Competitor[];
-  bracket?: Bracket;
+  bracket?: BracketWithCount;
 }
 
 type BracketWithCount = Bracket & {
   _count?: { matches: number };
+  refereeActive?: boolean;
+  activeMatchId?: string | null;
 };
 
 const statusIcons = {
@@ -105,6 +109,29 @@ export default function BracketsPage({
     fetchData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    const interval = setInterval(silentRefresh, 3000);
+    return () => clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tournamentId]);
+
+  async function silentRefresh() {
+    try {
+      const [categoriesData, bracketsData] = await Promise.all([
+        fetchJson<{
+          kataCategories: CategoryGroup[];
+          kumiteCategories: CategoryGroup[];
+        }>(`/api/tournaments/${tournamentId}/categories`),
+        fetchJson<BracketWithCount[]>(
+          `/api/tournaments/${tournamentId}/brackets`,
+        ),
+      ]);
+      applyBracketsToCategories(categoriesData, bracketsData);
+    } catch {
+      // Falha silenciosa no polling de fundo
+    }
+  }
 
   async function fetchData() {
     try {
@@ -295,7 +322,7 @@ export default function BracketsPage({
   return (
     <div className="container mx-auto p-6 print:p-0">
       {/* Header */}
-      <div className="mb-6 flex items-center justify-between gap-4">
+      <div className="mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold">Chaves e Categorias</h1>
           <div className="flex items-center flex-wrap gap-x-3 gap-y-1 mt-1.5 print:hidden">
@@ -317,6 +344,10 @@ export default function BracketsPage({
             )}
           </div>
         </div>
+
+        <div className="flex items-center gap-3 print:hidden shrink-0">
+          <RefereeConnectDialog tournamentId={tournamentId} />
+        </div>
       </div>
 
       {/* Generate All Button */}
@@ -328,7 +359,7 @@ export default function BracketsPage({
         >
           {generatingAll ? (
             <>
-              <Loader2 className="animate-spin" />
+              <Spinner size="size-4" className="mr-2" />
               Gerando...
             </>
           ) : (
@@ -444,7 +475,7 @@ export default function BracketsPage({
             >
               {generatingAll ? (
                 <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  <Spinner size="size-4" className="mr-2" />
                   Gerando...
                 </>
               ) : (
@@ -559,6 +590,16 @@ function CategoryCard({
                   {bracketStatusLabel[group.bracket.status]}
                 </Badge>
               )}
+
+              {group.bracket?.refereeActive && (
+                <Badge
+                  variant="outline"
+                  className="text-amber-600 dark:text-amber-400 border-amber-500/40 bg-amber-500/10 gap-1 text-xs print:hidden"
+                >
+                  <Lock className="size-3" />
+                  Árbitro na mesa
+                </Badge>
+              )}
             </CardTitle>
             <CardDescription>
               {group.competitors.length}{" "}
@@ -591,7 +632,7 @@ function CategoryCard({
                   className="text-destructive border-destructive/30 hover:bg-destructive/10 hover:border-destructive/60 shrink-0"
                 >
                   {isLoading ? (
-                    <Loader2 className="animate-spin" />
+                    <Spinner size="size-4" />
                   ) : (
                     <Trash2 className="h-4 w-4" />
                   )}
@@ -607,7 +648,7 @@ function CategoryCard({
               >
                 {isLoading ? (
                   <>
-                    <Loader2 className="animate-spin" />
+                    <Spinner size="size-4" className="mr-2" />
                     Gerando...
                   </>
                 ) : (

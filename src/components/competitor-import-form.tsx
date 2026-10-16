@@ -11,7 +11,8 @@ import {
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { useState, useRef } from "react";
-import { Loader2, Upload, FileText, X } from "lucide-react";
+import { Upload, FileText, X } from "lucide-react";
+import { Spinner } from "@/components/luxe/spinner";
 import { cn } from "@/lib/utils";
 import { fetchJson } from "@/lib/api-client";
 
@@ -248,7 +249,7 @@ export function CompetitorImportForm({
             >
               {loading ? (
                 <>
-                  <Loader2 className="animate-spin" />
+                  <Spinner size="size-4" className="mr-2" />
                   Importando...
                 </>
               ) : (

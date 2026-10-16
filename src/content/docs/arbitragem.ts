@@ -1,7 +1,7 @@
 export const arbitragemContent = `
 ## Pontuação e arbitragem
 
-A tela de árbitro (\`.../brackets/[bracketId]/referee\`) controla o placar, o timer e as penalidades da luta em tempo real, transmitindo o estado ao vivo para o telão público (Scoreboard) enquanto a luta acontece.
+A tela de árbitro controla o placar, o timer e as penalidades da luta em tempo real, transmitindo o estado ao vivo para o telão público (Scoreboard) enquanto a luta acontece.
 
 ## Durante a luta
 
