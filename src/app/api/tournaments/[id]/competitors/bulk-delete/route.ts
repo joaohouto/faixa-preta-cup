@@ -24,15 +24,19 @@ export const DELETE = withApiHandler(
       );
     }
 
-    await db.bracket.deleteMany({
-      where: {
-        tournamentId,
-        status: "NOT_STARTED",
-      },
-    });
+    const result = await db.$transaction(async (tx) => {
+      await tx.refereeLock.deleteMany({ where: { tournamentId } });
+      await tx.liveMatch.deleteMany({ where: { tournamentId } });
+      await tx.bracket.deleteMany({
+        where: {
+          tournamentId,
+          status: "NOT_STARTED",
+        },
+      });
 
-    const result = await db.competitor.deleteMany({
-      where: { tournamentId },
+      return tx.competitor.deleteMany({
+        where: { tournamentId },
+      });
     });
 
     return NextResponse.json({

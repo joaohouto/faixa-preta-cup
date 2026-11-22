@@ -74,6 +74,8 @@ export const POST = withApiHandler(
 
           if (existing) {
             if (existing.status !== "NOT_STARTED") continue;
+            await db.refereeLock.deleteMany({ where: { bracketId: existing.id } });
+            await db.liveMatch.deleteMany({ where: { bracketId: existing.id } });
             await db.bracket.delete({ where: { id: existing.id } });
           }
 
@@ -122,6 +124,8 @@ export const POST = withApiHandler(
           400
         );
       }
+      await db.refereeLock.deleteMany({ where: { bracketId: existing.id } });
+      await db.liveMatch.deleteMany({ where: { bracketId: existing.id } });
       await db.bracket.delete({ where: { id: existing.id } });
     }
 
@@ -177,6 +181,8 @@ export const GET = withApiHandler(
   "BRACKETS_GET",
   async (req: Request, context: { params: Promise<{ id: string }> }) => {
     const { id: tournamentId } = await context.params;
+    const { searchParams } = new URL(req.url);
+    const includeMatches = searchParams.get("includeMatches") === "true";
 
     const brackets = await db.bracket.findMany({
       where: { tournamentId },
@@ -184,6 +190,13 @@ export const GET = withApiHandler(
         _count: {
           select: { matches: true },
         },
+        ...(includeMatches
+          ? {
+              matches: {
+                orderBy: [{ round: "asc" }, { position: "asc" }],
+              },
+            }
+          : {}),
       },
       orderBy: [{ modality: "asc" }, { category: "asc" }],
     });

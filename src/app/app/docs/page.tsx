@@ -2,7 +2,7 @@ import { Header } from "@/components/header";
 import { DocsContent } from "./docs-content";
 
 export const metadata = {
-  title: "Documentação — Faixa Preta Cup",
+  title: "Documentação",
 };
 
 export default function DocsPage() {

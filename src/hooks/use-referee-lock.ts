@@ -236,6 +236,7 @@ export function useRefereeLock(
 
   return {
     status,
+    clientId: clientIdRef.current,
     lockHolder,
     activeMatchId: lockHolder?.matchId || null,
     isAcquired: status === "acquired",

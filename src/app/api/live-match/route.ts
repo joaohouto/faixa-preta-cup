@@ -9,6 +9,7 @@ export const POST = withApiHandler("LIVE_MATCH_POST", async (req: Request) => {
     tournamentId,
     matchId,
     bracketId,
+    clientId,
     akaId,
     akaName,
     akaSchool,
@@ -31,6 +32,29 @@ export const POST = withApiHandler("LIVE_MATCH_POST", async (req: Request) => {
     timerEndAt,
     winner,
   } = body;
+
+  if (!tournamentId || !matchId || !bracketId) {
+    return apiError("tournamentId, bracketId e matchId são obrigatórios", 400);
+  }
+
+  // Se houver um RefereeLock ativo para esta chave pertencente a OUTRO cliente,
+  // impede que um espectador/segundo dispositivo sobrescreva o telão.
+  if (clientId) {
+    const activeLock = await db.refereeLock.findUnique({
+      where: { bracketId },
+    });
+    const now = new Date();
+    if (
+      activeLock &&
+      now < activeLock.expiresAt &&
+      activeLock.clientId !== clientId
+    ) {
+      return apiError(
+        "Outro árbitro detém o controle desta chave no momento",
+        423
+      );
+    }
+  }
 
   const matchData = {
     matchId,
@@ -91,16 +115,36 @@ export const DELETE = withApiHandler(
   async (req: Request) => {
     const { searchParams } = new URL(req.url);
     const tournamentId = searchParams.get("tournamentId");
+    const matchId = searchParams.get("matchId");
+    const bracketId = searchParams.get("bracketId");
+    const clientId = searchParams.get("clientId");
 
     if (!tournamentId) {
       return apiError("Tournament ID required", 400);
     }
 
-    // deleteMany em vez de delete: idempotente. A limpeza roda no unmount
-    // da tela de árbitro e pode ser chamada mais de uma vez (StrictMode,
-    // navegação rápida) — se a linha já não existir, não é um erro.
+    // Se um clientId foi informado e outro árbitro detém o lock ativo da chave,
+    // ignora a limpeza para não apagar o telão de quem está arbitrando.
+    if (bracketId && clientId) {
+      const activeLock = await db.refereeLock.findUnique({
+        where: { bracketId },
+      });
+      const now = new Date();
+      if (
+        activeLock &&
+        now < activeLock.expiresAt &&
+        activeLock.clientId !== clientId
+      ) {
+        return new NextResponse(null, { status: 204 });
+      }
+    }
+
     await db.liveMatch.deleteMany({
-      where: { tournamentId },
+      where: {
+        tournamentId,
+        ...(matchId ? { matchId } : {}),
+        ...(bracketId ? { bracketId } : {}),
+      },
     });
 
     return new NextResponse(null, { status: 204 });

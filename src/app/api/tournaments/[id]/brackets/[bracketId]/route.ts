@@ -43,9 +43,11 @@ export const DELETE = withApiHandler(
     );
     if (bracket instanceof Response) return bracket;
 
-    await db.bracket.delete({
-      where: { id: bracketId },
-    });
+    await db.$transaction([
+      db.refereeLock.deleteMany({ where: { bracketId } }),
+      db.liveMatch.deleteMany({ where: { bracketId } }),
+      db.bracket.delete({ where: { id: bracketId } }),
+    ]);
 
     return new NextResponse(null, { status: 204 });
   }

@@ -67,7 +67,7 @@ export async function generateBracket(input: BracketGenerationInput) {
  * 4 matches → [1, 2, 0, 3]
  * 8 matches → [3, 4, 2, 5, 1, 6, 0, 7]
  */
-function getSeededPositions(numMatches: number): number[] {
+export function getSeededPositions(numMatches: number): number[] {
   if (numMatches <= 1) return [0];
 
   const positions: number[] = [];
@@ -93,25 +93,8 @@ function getSeededPositions(numMatches: number): number[] {
  * Os byes são atribuídos às últimas posições da ordem `seeded` (ou seja,
  * preferencialmente às bordas, e só invadindo o miolo se houver byes
  * demais para caberem só nas bordas) — o restante recebe 2 (luta real).
- *
- * Exemplos para 4 matches (seeded=[1,2,0,3]):
- *   6 comps → 2 byes  → posições [1,2]=2, [0,3]=1  (bordas viram bye)
- *   5 comps → 3 byes  → posições [1]=2, [2,0,3]=1  (só 1 luta cheia)
- *   7 comps → 1 bye   → posições [1,2,0]=2, [3]=1
- *
- * HISTÓRICO: até 2026-08-05 esta função usava uma distribuição por
- * `Math.ceil(remaining / edges)` que podia zerar uma posição (uma luta
- * sem nenhum competidor) sempre que `numCompetitors` estivesse em
- * determinadas faixas (ex.: 5, 9-11, 17-23, 33-47 competidores — quase
- * 40% dos tamanhos possíveis). Esse match "fantasma" nascia com
- * `isBye: true` mas sem `winnerId`, era contado como "resolvido" por
- * `checkAndCompleteBracket` sem nunca propagar ninguém, e travava a
- * chave para sempre (sem campeão, sem erro visível). Corrigido usando a
- * fórmula fechada acima, validada por simulação exaustiva (N=2..200) e
- * execução real ponta-a-ponta contra Prisma/SQLite (N=2..40, todas as
- * chaves completam com campeão).
  */
-function computeSlots(
+export function computeSlots(
   seeded: number[],
   numCompetitors: number,
 ): Record<number, number> {
@@ -126,14 +109,115 @@ function computeSlots(
   return slots;
 }
 
+function normalizeSchool(school: string | null | undefined): string {
+  const normalized = (school ?? "").trim().toLowerCase();
+  if (
+    !normalized ||
+    normalized === "não informado" ||
+    normalized === "nao informado" ||
+    normalized === "-" ||
+    normalized === "—"
+  ) {
+    // Atletas "Sem escola / Não informado" não contam como mesma academia
+    return "";
+  }
+  return normalized;
+}
+
+function isSameSchool(a: Competitor | null, b: Competitor | null): boolean {
+  if (!a || !b) return false;
+  const schoolA = normalizeSchool(a.school);
+  const schoolB = normalizeSchool(b.school);
+  return schoolA !== "" && schoolA === schoolB;
+}
+
+/**
+ * Distribui os competidores nas posições da 1ª rodada respeitando a contagem
+ * de slots (1 ou 2) de cada posição e evitando que dois atletas da mesma
+ * escola se enfrentem logo na 1ª rodada sempre que matematicamente possível.
+ */
+export function assignCompetitorsToFirstRound(
+  competitors: Competitor[],
+  seeded: number[],
+  slots: Record<number, number>,
+): Record<number, { aka: Competitor | null; ao: Competitor | null }> {
+  let compIndex = 0;
+  const matchData: Record<
+    number,
+    { aka: Competitor | null; ao: Competitor | null }
+  > = {};
+
+  for (const pos of seeded) {
+    const count = slots[pos];
+    matchData[pos] = {
+      aka: count >= 1 ? competitors[compIndex++] : null,
+      ao: count >= 2 ? competitors[compIndex++] : null,
+    };
+  }
+
+  // Passo anti-colisão de mesma escola na 1ª rodada:
+  // Se uma luta real (aka e ao presentes) tiver atletas da mesma escola,
+  // procura outra posição na 1ª rodada para trocar um dos lados sem criar
+  // outra colisão de escola.
+  const fullPositions = seeded.filter((pos) => slots[pos] >= 2);
+  const byePositions = seeded.filter((pos) => slots[pos] === 1);
+
+  for (const pos of fullPositions) {
+    const current = matchData[pos];
+    if (!isSameSchool(current.aka, current.ao)) continue;
+
+    let resolved = false;
+
+    // 1. Tenta trocar o `ao` com o `ao` (ou `aka`) de outra luta cheia
+    for (const otherPos of fullPositions) {
+      if (otherPos === pos) continue;
+      const other = matchData[otherPos];
+
+      if (
+        !isSameSchool(current.aka, other.ao) &&
+        !isSameSchool(other.aka, current.ao)
+      ) {
+        const temp = current.ao;
+        current.ao = other.ao;
+        other.ao = temp;
+        resolved = true;
+        break;
+      }
+
+      if (
+        !isSameSchool(current.aka, other.aka) &&
+        !isSameSchool(current.ao, other.ao)
+      ) {
+        const temp = current.ao;
+        current.ao = other.aka;
+        other.aka = temp;
+        resolved = true;
+        break;
+      }
+    }
+
+    // 2. Se não resolveu entre lutas cheias, tenta trocar `ao` com o `aka` de um bye
+    if (!resolved) {
+      for (const byePos of byePositions) {
+        const byeMatch = matchData[byePos];
+        if (!isSameSchool(current.aka, byeMatch.aka)) {
+          const temp = current.ao;
+          current.ao = byeMatch.aka;
+          byeMatch.aka = temp;
+          resolved = true;
+          break;
+        }
+      }
+    }
+  }
+
+  return matchData;
+}
+
 /**
  * Cria os matches da rodada 1: distribui `competitors` (já ordenados
  * pelo caller) nas posições calculadas por `computeSlots`, na ordem
- * `seeded` (miolo → bordas). Um match com apenas um lado preenchido
- * é um bye e já nasce completo (`isCompleted: true`, `winnerId` do lado
- * preenchido) — não precisa de arbitragem. Como `computeSlots` agora
- * garante `count >= 1` para toda posição, `aka` e `ao` nunca ficam ambos
- * null aqui (ver histórico do fix em `computeSlots`).
+ * `seeded` (miolo → bordas), evitando colisões da mesma escola na 1ª rodada.
  */
 async function generateFirstRoundMatches(
   bracketId: string,
@@ -143,18 +227,7 @@ async function generateFirstRoundMatches(
   const numMatches = totalSlots / 2;
   const seeded = getSeededPositions(numMatches);
   const slots = computeSlots(seeded, competitors.length);
-
-  // Atribui competidores às posições na ordem seeded, respeitando o slot count
-  let compIndex = 0;
-  const matchData: Record<number, { aka: Competitor | null; ao: Competitor | null }> = {};
-
-  for (const pos of seeded) {
-    const count = slots[pos];
-    matchData[pos] = {
-      aka: count >= 1 ? competitors[compIndex++] : null,
-      ao:  count >= 2 ? competitors[compIndex++] : null,
-    };
-  }
+  const matchData = assignCompetitorsToFirstRound(competitors, seeded, slots);
 
   const matches = [];
   for (let i = 0; i < numMatches; i++) {
@@ -165,7 +238,7 @@ async function generateFirstRoundMatches(
       round: 1,
       position: i,
       akaId: aka?.id ?? null,
-      aoId:  ao?.id  ?? null,
+      aoId: ao?.id ?? null,
       isBye: !aka || !ao,
       isCompleted: false,
     };
@@ -186,12 +259,7 @@ async function generateFirstRoundMatches(
 
 /**
  * Cria os placeholders vazios das rodadas 2..totalRounds (akaId/aoId/
- * winnerId todos null, isBye sempre false). Esses matches só são
- * preenchidos depois, via `propagateByeWinners` (byes da rodada 1) e
- * `propagateWinner` em matches/[matchId]/route.ts (vencedores de matches
- * jogados). Diferente da rodada 1, matches aqui NUNCA são marcados como
- * `isBye` — um lado só fica null temporariamente, enquanto a luta da
- * rodada anterior que alimenta esse lado ainda não foi jogada.
+ * winnerId todos null, isBye sempre false).
  */
 async function generateSubsequentRounds(
   bracketId: string,
@@ -227,14 +295,6 @@ async function generateSubsequentRounds(
  * Cria o match de 3º lugar. Ele reaproveita `round: totalRounds`
  * (a mesma rodada da final) com `position: 1` — a posição 0 dessa
  * rodada é sempre a final (criada em `generateSubsequentRounds`).
- * É por isso que toda query que escreve na rodada final usa
- * `isThirdPlace: false` no `where`: sem esse filtro, o `updateMany`
- * poderia (em tese) colidir com essa linha por causa do `round` igual.
- * Na prática a posição de destino calculada em `propagateWinner` para
- * quem vem da semifinal é sempre 0, então a colisão nunca ocorre — mas
- * o filtro é o que garante isso, não a matemática por si só.
- * Só é chamada quando `competitors.length >= 4` (com menos que isso não
- * há dois "perdedores de semifinal" reais para disputar o 3º lugar).
  */
 async function createThirdPlaceMatch(bracketId: string, totalRounds: number) {
   await db.match.create({
@@ -253,15 +313,7 @@ async function createThirdPlaceMatch(bracketId: string, totalRounds: number) {
 
 /**
  * Propaga o vencedor dos byes da rodada 1 para a rodada 2, logo após a
- * geração da chave. Só olha para `round === 1` — byes não existem (nem
- * podem ser criados) em rodadas seguintes, essas só avançam por vitória
- * real via `propagateWinner` em matches/[matchId]/route.ts.
- * `position % 2 === 0` decide o lado (aka/ao) do match de destino: essa é
- * a mesma convenção usada em `propagateWinner`, então os dois precisam
- * ficar em sincronia se a numeração de posições mudar.
- * O filtro `match.winnerId` no `.filter()` abaixo é redundante hoje (todo
- * bye de rodada 1 sempre nasce com winnerId — ver `generateFirstRoundMatches`)
- * mas é mantido como proteção defensiva.
+ * geração da chave.
  */
 export async function propagateByeWinners(bracketId: string) {
   const bracket = await db.bracket.findUnique({
